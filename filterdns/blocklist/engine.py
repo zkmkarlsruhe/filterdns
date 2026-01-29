@@ -131,6 +131,12 @@ class BlocklistEngine:
         """Get number of domains in a specific blocklist."""
         return len(self._blocklists.get(blocklist_id, set()))
 
+    def clear(self) -> None:
+        """Clear all blocklists."""
+        self._blocklists.clear()
+        self._all_domains.clear()
+        logger.info("All blocklists cleared")
+
 
 # Global engine instance
 _engine: BlocklistEngine | None = None
