@@ -119,6 +119,75 @@ class BlocklistEngine:
         # Domain was in combined set but not in any active blocklist
         return BlockResult(blocked=False)
 
+    def is_blocked_ordered(
+        self,
+        domain: str,
+        ordered_blocklist_ids: list[str],
+    ) -> BlockResult:
+        """Check if domain is blocked, checking blocklists in provided order.
+
+        First matching blocklist wins (deterministic attribution).
+        This ensures consistent results when a domain appears in multiple blocklists.
+
+        Args:
+            domain: Domain to check
+            ordered_blocklist_ids: List of blocklist IDs to check, in order.
+                                   First match wins.
+
+        Returns:
+            BlockResult with blocked status and blocklist ID if blocked
+        """
+        domain = domain.lower()
+
+        # Check each blocklist in order
+        for blocklist_id in ordered_blocklist_ids:
+            if blocklist_id not in self._blocklists:
+                continue
+
+            blocklist_domains = self._blocklists[blocklist_id]
+
+            # Check exact match
+            if domain in blocklist_domains:
+                return BlockResult(blocked=True, blocklist_id=blocklist_id)
+
+            # Check parent domains (for subdomain blocking)
+            parts = domain.split(".")
+            for i in range(1, len(parts) - 1):
+                parent = ".".join(parts[i:])
+                if parent in blocklist_domains:
+                    return BlockResult(blocked=True, blocklist_id=blocklist_id)
+
+        return BlockResult(blocked=False)
+
+    def is_domain_in_blocklist(self, domain: str, blocklist_id: str) -> bool:
+        """Check if a domain is in a specific blocklist (with subdomain matching).
+
+        Args:
+            domain: Domain to check
+            blocklist_id: Blocklist ID to check against
+
+        Returns:
+            True if domain or any parent is in the blocklist
+        """
+        if blocklist_id not in self._blocklists:
+            return False
+
+        domain = domain.lower()
+        blocklist_domains = self._blocklists[blocklist_id]
+
+        # Check exact match
+        if domain in blocklist_domains:
+            return True
+
+        # Check parent domains
+        parts = domain.split(".")
+        for i in range(1, len(parts) - 1):
+            parent = ".".join(parts[i:])
+            if parent in blocklist_domains:
+                return True
+
+        return False
+
     def get_blocklist_ids(self) -> list[str]:
         """Get list of loaded blocklist IDs."""
         return list(self._blocklists.keys())

@@ -1,22 +1,32 @@
-"""REST API routes for FilterDNS."""
+"""REST API routes for FilterDNS.
 
-from typing import Any
+Naming convention (museum-focused):
+- Profile: DNS filtering configuration (e.g., "ps5-gaming-exhibition")
+- Device: Individual machine using a profile (e.g., PS5 in Hall 3)
+- Preset: Predefined blocking rule set (e.g., "block-social-media")
+"""
+
+import asyncio
+import json
+from datetime import datetime
+from typing import Any, AsyncGenerator
 from uuid import UUID
 
-from quart import Blueprint, jsonify, request, session
+from quart import Blueprint, Response, jsonify, make_response, request, session
 
-from filterdns.api.auth import admin_required, client_auth_optional, verify_admin_password
+from filterdns.api.auth import admin_required, profile_auth_optional, verify_admin_password
 from filterdns.blocklist.engine import get_engine
 from filterdns.config import settings
 from filterdns.db import queries
 from filterdns.db.models import (
     BlocklistCreate,
-    Client,
-    ClientCreate,
-    ClientRuleCreate,
-    LinkedDeviceCreate,
+    DeviceCreate,
+    Profile,
+    ProfileCreate,
+    ProfileRuleCreate,
     RuleType,
 )
+from filterdns.profiles.loader import reload_preset_in_engine, remove_preset_from_engine
 
 
 def create_api_blueprint() -> Blueprint:
@@ -47,16 +57,16 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 200
 
-    @bp.route("/clients", methods=["POST"])
-    async def create_client() -> tuple[dict[str, Any], int]:
-        """Create a new client (self-service)."""
+    @bp.route("/profiles", methods=["POST"])
+    async def create_profile() -> tuple[dict[str, Any], int]:
+        """Create a new profile (self-service)."""
         data = await request.get_json()
         if not data:
             return jsonify({"error": "Request body required"}), 400
 
         name = data.get("name", "").strip().lower()
         if not name:
-            return jsonify({"error": "Client name required"}), 400
+            return jsonify({"error": "Profile name required"}), 400
 
         # Validate name format (DNS subdomain rules)
         if not name.replace("-", "").isalnum() or name.startswith("-") or name.endswith("-"):
@@ -68,64 +78,183 @@ def create_api_blueprint() -> Blueprint:
             return jsonify({"error": "Name too long (max 63 characters)"}), 400
 
         # Check if name already exists
-        existing = await queries.get_client_by_name(name)
+        existing = await queries.get_profile_by_name(name)
         if existing:
-            return jsonify({"error": "Client name already taken"}), 409
+            return jsonify({"error": "Profile name already taken"}), 409
 
         try:
-            client = await queries.create_client(
-                ClientCreate(name=name, password=data.get("password"))
+            profile = await queries.create_profile(
+                ProfileCreate(name=name, password=data.get("password"), description=data.get("description"))
             )
 
             # Set default blocklists (Hagezi Multi Normal)
-            await queries.add_client_blocklist(client.id, "hagezi-multi-normal")
+            await queries.add_profile_blocklist(profile.id, "hagezi-multi-normal")
 
             return jsonify(
                 {
-                    "id": str(client.id),
-                    "name": client.name,
-                    "dns_endpoint": f"{client.name}.{settings.domain}",
-                    "doh_url": f"https://{client.name}.{settings.domain}/dns-query",
-                    "dot_hostname": f"{client.name}.{settings.domain}",
-                    "has_password": client.password_hash is not None,
-                    "created_at": client.created_at.isoformat(),
+                    "id": str(profile.id),
+                    "name": profile.name,
+                    "description": profile.description,
+                    "dns_endpoint": f"{profile.name}.{settings.domain}",
+                    "doh_url": f"https://{profile.name}.{settings.domain}/dns-query",
+                    "dot_hostname": f"{profile.name}.{settings.domain}",
+                    "has_password": profile.password_hash is not None,
+                    "created_at": profile.created_at.isoformat(),
                 }
             ), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     # =========================================================================
-    # Client API (per-client, optional password auth)
+    # Device Onboarding API
     # =========================================================================
 
-    @bp.route("/clients/<client_name>", methods=["GET"])
-    @client_auth_optional
-    async def get_client(client_name: str, client: Client = None) -> tuple[dict[str, Any], int]:
-        """Get client configuration and stats."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+    @bp.route("/join/<profile_name>", methods=["GET"])
+    async def get_join_info(profile_name: str) -> tuple[dict[str, Any], int]:
+        """Get profile info for device onboarding.
 
-        blocklist_ids = await queries.get_client_blocklists(client.id)
-        rules = await queries.get_client_rules(client.id)
-        stats = await queries.get_client_stats(client.id)
+        This endpoint is used when a device visits the profile page
+        to see profile details before joining.
+        """
+        profile = await queries.get_profile_by_name(profile_name)
+        if not profile:
+            return jsonify({"error": "Profile not found"}), 404
+
+        # Get current device IP
+        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+        if "," in device_ip:
+            device_ip = device_ip.split(",")[0].strip()
+
+        # Check if this device is already linked to this profile
+        existing_device = await queries.get_device_by_ip(profile.id, device_ip)
+
+        # Get device count for this profile
+        devices = await queries.list_devices(profile.id)
 
         return jsonify(
             {
-                "id": str(client.id),
-                "name": client.name,
-                "dns_endpoint": f"{client.name}.{settings.domain}",
-                "doh_url": f"https://{client.name}.{settings.domain}/dns-query",
-                "dot_hostname": f"{client.name}.{settings.domain}",
-                "has_password": client.password_hash is not None,
+                "profile": {
+                    "id": str(profile.id),
+                    "name": profile.name,
+                    "description": profile.description,
+                    "dns_endpoint": f"{profile.name}.{settings.domain}",
+                    "doh_url": f"https://{profile.name}.{settings.domain}/dns-query",
+                    "dot_hostname": f"{profile.name}.{settings.domain}",
+                    "device_count": len(devices),
+                },
+                "current_device": {
+                    "ip_address": device_ip,
+                    "already_joined": existing_device is not None,
+                    "device_id": str(existing_device.id) if existing_device else None,
+                    "device_name": existing_device.name if existing_device else None,
+                },
+            }
+        ), 200
+
+    @bp.route("/join/<profile_name>", methods=["POST"])
+    async def join_profile(profile_name: str) -> tuple[dict[str, Any], int]:
+        """Add current device to a profile.
+
+        This is the main onboarding endpoint. A device visits a profile page
+        and clicks "Add this device" to join.
+        """
+        profile = await queries.get_profile_by_name(profile_name)
+        if not profile:
+            return jsonify({"error": "Profile not found"}), 404
+
+        # Get current device IP
+        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+        if "," in device_ip:
+            device_ip = device_ip.split(",")[0].strip()
+
+        # Check for duplicate
+        existing_device = await queries.get_device_by_ip(profile.id, device_ip)
+        if existing_device:
+            return jsonify({
+                "error": "Device already joined",
+                "device": {
+                    "id": str(existing_device.id),
+                    "name": existing_device.name,
+                    "ip_address": existing_device.ip_address,
+                    "location": existing_device.location,
+                }
+            }), 409
+
+        # Get optional device info from request body
+        data = await request.get_json() or {}
+        device_name = data.get("name")
+        location = data.get("location")
+
+        # Add device to profile
+        device = await queries.add_device(
+            profile.id,
+            DeviceCreate(
+                name=device_name,
+                ip_address=device_ip,
+                location=location,
+            ),
+        )
+
+        return jsonify(
+            {
+                "message": "Device added to profile",
+                "device": {
+                    "id": str(device.id),
+                    "name": device.name,
+                    "ip_address": device.ip_address,
+                    "location": device.location,
+                    "created_at": device.created_at.isoformat(),
+                },
+                "profile": {
+                    "name": profile.name,
+                    "dns_endpoint": f"{profile.name}.{settings.domain}",
+                    "doh_url": f"https://{profile.name}.{settings.domain}/dns-query",
+                    "dot_hostname": f"{profile.name}.{settings.domain}",
+                },
+                "next_steps": [
+                    f"Configure your DNS to use {profile.name}.{settings.domain}",
+                    "Or use DNS-over-HTTPS (DoH) for encrypted DNS",
+                ],
+            }
+        ), 201
+
+    # =========================================================================
+    # Profile API (per-profile, optional password auth)
+    # =========================================================================
+
+    @bp.route("/profiles/<profile_name>", methods=["GET"])
+    @profile_auth_optional
+    async def get_profile(profile_name: str, profile: Profile = None) -> tuple[dict[str, Any], int]:
+        """Get profile configuration and stats."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        blocklist_ids = await queries.get_profile_blocklists(profile.id)
+        rules = await queries.get_profile_rules(profile.id)
+        stats = await queries.get_profile_stats(profile.id)
+        preset_ids = await queries.get_profile_presets(profile.id)
+
+        return jsonify(
+            {
+                "id": str(profile.id),
+                "name": profile.name,
+                "description": profile.description,
+                "dns_endpoint": f"{profile.name}.{settings.domain}",
+                "doh_url": f"https://{profile.name}.{settings.domain}/dns-query",
+                "dot_hostname": f"{profile.name}.{settings.domain}",
+                "has_password": profile.password_hash is not None,
                 "filtering_paused_until": (
-                    client.filtering_paused_until.isoformat()
-                    if client.filtering_paused_until
+                    profile.filtering_paused_until.isoformat()
+                    if profile.filtering_paused_until
                     else None
                 ),
-                "is_filtering_paused": client.is_filtering_paused,
+                "is_filtering_paused": profile.is_filtering_paused,
+                "maintenance_mode": profile.maintenance_mode,
+                "maintenance_allowlist": list(profile.maintenance_allowlist) if profile.maintenance_allowlist else [],
                 "blocklists": blocklist_ids,
+                "presets": preset_ids,
                 "rules": [
                     {
                         "id": str(r.id),
@@ -142,18 +271,18 @@ def create_api_blueprint() -> Blueprint:
                         {"domain": d, "count": c} for d, c in stats.top_blocked_domains[:5]
                     ],
                 },
-                "created_at": client.created_at.isoformat(),
+                "created_at": profile.created_at.isoformat(),
             }
         ), 200
 
-    @bp.route("/clients/<client_name>", methods=["PUT"])
-    @client_auth_optional
-    async def update_client(client_name: str, client: Client = None) -> tuple[dict[str, Any], int]:
-        """Update client settings."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+    @bp.route("/profiles/<profile_name>", methods=["PUT"])
+    @profile_auth_optional
+    async def update_profile(profile_name: str, profile: Profile = None) -> tuple[dict[str, Any], int]:
+        """Update profile settings."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         data = await request.get_json()
         if not data:
@@ -161,40 +290,44 @@ def create_api_blueprint() -> Blueprint:
 
         # Update password
         if "password" in data:
-            await queries.update_client_password(client.id, data.get("password"))
+            await queries.update_profile_password(profile.id, data.get("password"))
 
         # Update blocklists
         if "blocklists" in data:
-            await queries.set_client_blocklists(client.id, data["blocklists"])
+            await queries.set_profile_blocklists(profile.id, data["blocklists"])
 
-        return jsonify({"message": "Client updated"}), 200
+        # Update description
+        if "description" in data:
+            await queries.update_profile_description(profile.id, data["description"])
 
-    @bp.route("/clients/<client_name>", methods=["DELETE"])
-    @client_auth_optional
-    async def delete_client(client_name: str, client: Client = None) -> tuple[dict[str, Any], int]:
-        """Delete a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        return jsonify({"message": "Profile updated"}), 200
 
-        # Don't allow deleting the default client
-        if client.name == settings.default_client:
-            return jsonify({"error": "Cannot delete the default client"}), 403
+    @bp.route("/profiles/<profile_name>", methods=["DELETE"])
+    @profile_auth_optional
+    async def delete_profile(profile_name: str, profile: Profile = None) -> tuple[dict[str, Any], int]:
+        """Delete a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
-        await queries.delete_client(client.id)
-        return jsonify({"message": "Client deleted"}), 200
+        # Don't allow deleting the default profile
+        if profile.name == settings.default_client:
+            return jsonify({"error": "Cannot delete the default profile"}), 403
 
-    @bp.route("/clients/<client_name>/pause", methods=["POST"])
-    @client_auth_optional
+        await queries.delete_profile(profile.id)
+        return jsonify({"message": "Profile deleted"}), 200
+
+    @bp.route("/profiles/<profile_name>/pause", methods=["POST"])
+    @profile_auth_optional
     async def pause_filtering(
-        client_name: str, client: Client = None
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Pause filtering for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Pause filtering for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         data = await request.get_json() or {}
         minutes = data.get("minutes", 5)
@@ -202,7 +335,7 @@ def create_api_blueprint() -> Blueprint:
         if minutes not in [5, 15, 30, 60]:
             return jsonify({"error": "Minutes must be 5, 15, 30, or 60"}), 400
 
-        updated = await queries.pause_client_filtering(client.id, minutes)
+        updated = await queries.pause_profile_filtering(profile.id, minutes)
         return jsonify(
             {
                 "message": f"Filtering paused for {minutes} minutes",
@@ -212,30 +345,30 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 200
 
-    @bp.route("/clients/<client_name>/resume", methods=["POST"])
-    @client_auth_optional
+    @bp.route("/profiles/<profile_name>/resume", methods=["POST"])
+    @profile_auth_optional
     async def resume_filtering(
-        client_name: str, client: Client = None
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Resume filtering for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Resume filtering for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
-        await queries.resume_client_filtering(client.id)
+        await queries.resume_profile_filtering(profile.id)
         return jsonify({"message": "Filtering resumed"}), 200
 
-    @bp.route("/clients/<client_name>/logs", methods=["GET"])
-    @client_auth_optional
-    async def get_client_logs(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/logs", methods=["GET"])
+    @profile_auth_optional
+    async def get_profile_logs(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Get query logs for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Get query logs for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         limit = min(int(request.args.get("limit", 100)), 1000)
         offset = int(request.args.get("offset", 0))
@@ -243,7 +376,7 @@ def create_api_blueprint() -> Blueprint:
         domain_filter = request.args.get("domain")
 
         logs = await queries.get_query_logs(
-            client_id=client.id,
+            profile_id=profile.id,
             limit=limit,
             offset=offset,
             blocked_only=blocked_only,
@@ -268,19 +401,89 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 200
 
-    @bp.route("/clients/<client_name>/stats", methods=["GET"])
-    @client_auth_optional
-    async def get_client_stats(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/logs/stream", methods=["GET"])
+    @profile_auth_optional
+    async def stream_profile_logs(
+        profile_name: str, profile: Profile = None
+    ) -> Response:
+        """Stream query logs for a profile via Server-Sent Events (SSE).
+
+        Query parameters:
+        - blocked_only: Only stream blocked queries (default: false)
+        """
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        blocked_only = request.args.get("blocked", "").lower() == "true"
+
+        async def generate_sse() -> AsyncGenerator[str, None]:
+            """Generate SSE events for new log entries."""
+            last_timestamp: datetime | None = None
+
+            while True:
+                try:
+                    # Get recent logs since last check
+                    logs = await queries.get_query_logs(
+                        profile_id=profile.id,
+                        limit=50,
+                        offset=0,
+                        blocked_only=blocked_only,
+                    )
+
+                    # Filter to only new logs
+                    new_logs = []
+                    for log in reversed(logs):  # Process oldest first
+                        if last_timestamp is None or log.timestamp > last_timestamp:
+                            new_logs.append(log)
+                            last_timestamp = log.timestamp
+
+                    # Send new log events
+                    for log in new_logs:
+                        event_data = {
+                            "timestamp": log.timestamp.isoformat(),
+                            "domain": log.domain,
+                            "query_type": log.query_type,
+                            "blocked": log.blocked,
+                            "blocklist_id": log.blocklist_id,
+                            "response_time_ms": log.response_time_ms,
+                        }
+                        yield f"event: log\ndata: {json.dumps(event_data)}\n\n"
+
+                    # Send keepalive comment every iteration
+                    yield ": keepalive\n\n"
+
+                    # Wait before next check
+                    await asyncio.sleep(1)
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    # Send error event
+                    yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                    await asyncio.sleep(5)  # Wait longer on error
+
+        response = await make_response(generate_sse())
+        response.headers["Content-Type"] = "text/event-stream"
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Connection"] = "keep-alive"
+        response.headers["X-Accel-Buffering"] = "no"  # Disable nginx/traefik buffering
+        return response
+
+    @bp.route("/profiles/<profile_name>/stats", methods=["GET"])
+    @profile_auth_optional
+    async def get_profile_stats(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Get statistics for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Get statistics for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         hours = min(int(request.args.get("hours", 24)), 168)  # Max 7 days
-        stats = await queries.get_client_stats(client.id, hours)
+        stats = await queries.get_profile_stats(profile.id, hours)
 
         return jsonify(
             {
@@ -297,21 +500,21 @@ def create_api_blueprint() -> Blueprint:
         ), 200
 
     # =========================================================================
-    # Client Rules API
+    # Profile Rules API
     # =========================================================================
 
-    @bp.route("/clients/<client_name>/rules", methods=["GET"])
-    @client_auth_optional
-    async def list_client_rules(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/rules", methods=["GET"])
+    @profile_auth_optional
+    async def list_profile_rules(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """List custom rules for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """List custom rules for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
-        rules = await queries.get_client_rules(client.id)
+        rules = await queries.get_profile_rules(profile.id)
         return jsonify(
             {
                 "rules": [
@@ -326,16 +529,16 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 200
 
-    @bp.route("/clients/<client_name>/rules", methods=["POST"])
-    @client_auth_optional
-    async def create_client_rule(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/rules", methods=["POST"])
+    @profile_auth_optional
+    async def create_profile_rule(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Create a custom rule for a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Create a custom rule for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         data = await request.get_json()
         if not data:
@@ -349,9 +552,9 @@ def create_api_blueprint() -> Blueprint:
         if rule_type not in ["allow", "deny"]:
             return jsonify({"error": "rule_type must be 'allow' or 'deny'"}), 400
 
-        rule = await queries.create_client_rule(
-            client.id,
-            ClientRuleCreate(
+        rule = await queries.create_profile_rule(
+            profile.id,
+            ProfileRuleCreate(
                 domain=domain,
                 rule_type=RuleType.ALLOW if rule_type == "allow" else RuleType.DENY,
             ),
@@ -366,52 +569,53 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 201
 
-    @bp.route("/clients/<client_name>/rules/<rule_id>", methods=["DELETE"])
-    @client_auth_optional
-    async def delete_client_rule(
-        client_name: str, rule_id: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/rules/<rule_id>", methods=["DELETE"])
+    @profile_auth_optional
+    async def delete_profile_rule(
+        profile_name: str, rule_id: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
         """Delete a custom rule."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         try:
             rule_uuid = UUID(rule_id)
         except ValueError:
             return jsonify({"error": "Invalid rule ID"}), 400
 
-        deleted = await queries.delete_client_rule(rule_uuid)
+        deleted = await queries.delete_profile_rule(rule_uuid)
         if not deleted:
             return jsonify({"error": "Rule not found"}), 404
 
         return jsonify({"message": "Rule deleted"}), 200
 
     # =========================================================================
-    # Linked Devices API
+    # Devices API (devices linked to profiles)
     # =========================================================================
 
-    @bp.route("/clients/<client_name>/devices", methods=["GET"])
-    @client_auth_optional
-    async def list_linked_devices(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/devices", methods=["GET"])
+    @profile_auth_optional
+    async def list_devices(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """List devices linked to a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """List devices linked to a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
-        devices = await queries.list_linked_devices(client.id)
+        devices = await queries.list_devices(profile.id)
         return jsonify(
             {
                 "devices": [
                     {
                         "id": str(d.id),
+                        "name": d.name,
                         "ip_address": d.ip_address,
                         "hostname": d.hostname,
-                        "label": d.label,
+                        "location": d.location,
                         "created_at": d.created_at.isoformat(),
                     }
                     for d in devices
@@ -419,81 +623,381 @@ def create_api_blueprint() -> Blueprint:
             }
         ), 200
 
-    @bp.route("/clients/<client_name>/devices", methods=["POST"])
-    @client_auth_optional
-    async def link_device(
-        client_name: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/devices", methods=["POST"])
+    @profile_auth_optional
+    async def add_device(
+        profile_name: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Link a device to a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Add a device to a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
-        data = await request.get_json()
-        if not data:
-            return jsonify({"error": "Request body required"}), 400
+        data = await request.get_json() or {}
 
+        # Get IP from request body or auto-detect
         ip_address = data.get("ip_address", "").strip()
         if not ip_address:
-            return jsonify({"error": "IP address required"}), 400
+            ip_address = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+            if "," in ip_address:
+                ip_address = ip_address.split(",")[0].strip()
 
-        device = await queries.link_device(
-            client.id,
-            LinkedDeviceCreate(ip_address=ip_address, label=data.get("label")),
+        # Check for duplicate
+        existing = await queries.get_device_by_ip(profile.id, ip_address)
+        if existing:
+            return jsonify({"error": "Device with this IP already exists in profile"}), 409
+
+        device = await queries.add_device(
+            profile.id,
+            DeviceCreate(
+                name=data.get("name"),
+                ip_address=ip_address,
+                location=data.get("location"),
+            ),
         )
 
         return jsonify(
             {
                 "id": str(device.id),
+                "name": device.name,
                 "ip_address": device.ip_address,
-                "label": device.label,
+                "location": device.location,
                 "created_at": device.created_at.isoformat(),
             }
         ), 201
 
-    @bp.route("/clients/<client_name>/devices/<device_id>", methods=["DELETE"])
-    @client_auth_optional
-    async def unlink_device(
-        client_name: str, device_id: str, client: Client = None
+    @bp.route("/profiles/<profile_name>/devices/<device_id>", methods=["PUT"])
+    @profile_auth_optional
+    async def update_device(
+        profile_name: str, device_id: str, profile: Profile = None
     ) -> tuple[dict[str, Any], int]:
-        """Unlink a device from a client."""
-        if not client:
-            client = await queries.get_client_by_name(client_name)
-            if not client:
-                return jsonify({"error": "Client not found"}), 404
+        """Update a device's name or location."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
 
         try:
             device_uuid = UUID(device_id)
         except ValueError:
             return jsonify({"error": "Invalid device ID"}), 400
 
-        deleted = await queries.unlink_device(device_uuid)
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        device = await queries.update_device(
+            device_uuid,
+            name=data.get("name"),
+            location=data.get("location"),
+        )
+        if not device:
+            return jsonify({"error": "Device not found"}), 404
+
+        return jsonify(
+            {
+                "id": str(device.id),
+                "name": device.name,
+                "ip_address": device.ip_address,
+                "location": device.location,
+            }
+        ), 200
+
+    @bp.route("/profiles/<profile_name>/devices/<device_id>", methods=["DELETE"])
+    @profile_auth_optional
+    async def remove_device(
+        profile_name: str, device_id: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Remove a device from a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        try:
+            device_uuid = UUID(device_id)
+        except ValueError:
+            return jsonify({"error": "Invalid device ID"}), 400
+
+        deleted = await queries.remove_device(device_uuid)
         if not deleted:
             return jsonify({"error": "Device not found"}), 404
 
-        return jsonify({"message": "Device unlinked"}), 200
+        return jsonify({"message": "Device removed"}), 200
 
     @bp.route("/whoami", methods=["GET"])
     async def whoami() -> tuple[dict[str, Any], int]:
         """Detect current device (IP and PTR hostname)."""
-        client_ip = request.remote_addr or "unknown"
+        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
+        if "," in device_ip:
+            device_ip = device_ip.split(",")[0].strip()
 
         # Try to get hostname via PTR
         from filterdns.dns.resolver import get_resolver
 
-        hostname = await get_resolver().reverse_lookup(client_ip)
+        hostname = await get_resolver().reverse_lookup(device_ip)
 
-        # Check if IP is already linked
-        linked_client = await queries.get_client_by_ip(client_ip)
+        # Check if IP is already linked to any profile
+        linked_profile = await queries.get_profile_by_device_ip(device_ip)
 
         return jsonify(
             {
-                "ip_address": client_ip,
+                "ip_address": device_ip,
                 "hostname": hostname,
-                "linked_to": linked_client.name if linked_client else None,
+                "linked_to": linked_profile.name if linked_profile else None,
+                "profile_id": str(linked_profile.id) if linked_profile else None,
             }
         ), 200
+
+    # =========================================================================
+    # Presets API (Public - list all presets, formerly restriction profiles)
+    # =========================================================================
+
+    @bp.route("/presets", methods=["GET"])
+    async def list_presets() -> tuple[dict[str, Any], int]:
+        """List all available presets (predefined blocking rule sets)."""
+        presets = await queries.list_presets()
+        result = []
+
+        for p in presets:
+            domain_count = await queries.get_preset_domain_count(p.id)
+            result.append(
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "description": p.description,
+                    "category": p.category,
+                    "is_builtin": p.is_builtin,
+                    "domain_count": domain_count,
+                }
+            )
+
+        return jsonify({"presets": result}), 200
+
+    # =========================================================================
+    # Profile Presets API (presets enabled for a profile)
+    # =========================================================================
+
+    @bp.route("/profiles/<profile_name>/presets", methods=["GET"])
+    @profile_auth_optional
+    async def get_profile_presets(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Get presets enabled for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        preset_ids = await queries.get_profile_presets(profile.id)
+
+        # Get preset details
+        presets = []
+        for pid in preset_ids:
+            preset = await queries.get_preset(pid)
+            if preset:
+                presets.append(
+                    {
+                        "id": preset.id,
+                        "name": preset.name,
+                        "category": preset.category,
+                    }
+                )
+
+        return jsonify({"presets": presets, "preset_ids": preset_ids}), 200
+
+    @bp.route("/profiles/<profile_name>/presets", methods=["PUT"])
+    @profile_auth_optional
+    async def set_profile_presets(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Set presets for a profile (replaces existing)."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        preset_ids = data.get("preset_ids", [])
+        if not isinstance(preset_ids, list):
+            return jsonify({"error": "preset_ids must be a list"}), 400
+
+        # Validate all preset IDs exist
+        for pid in preset_ids:
+            if not await queries.preset_exists(pid):
+                return jsonify({"error": f"Preset not found: {pid}"}), 404
+
+        await queries.set_profile_presets(profile.id, preset_ids)
+        return jsonify({"message": "Presets updated", "preset_ids": preset_ids}), 200
+
+    @bp.route("/profiles/<profile_name>/presets/<preset_id>", methods=["POST"])
+    @profile_auth_optional
+    async def add_profile_preset(
+        profile_name: str, preset_id: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Add a preset to a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        if not await queries.preset_exists(preset_id):
+            return jsonify({"error": "Preset not found"}), 404
+
+        await queries.add_profile_preset(profile.id, preset_id)
+        return jsonify({"message": f"Preset {preset_id} added"}), 200
+
+    @bp.route("/profiles/<profile_name>/presets/<preset_id>", methods=["DELETE"])
+    @profile_auth_optional
+    async def remove_profile_preset(
+        profile_name: str, preset_id: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Remove a preset from a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        await queries.remove_profile_preset(profile.id, preset_id)
+        return jsonify({"message": f"Preset {preset_id} removed"}), 200
+
+    # =========================================================================
+    # Maintenance Mode API
+    # =========================================================================
+
+    @bp.route("/profiles/<profile_name>/maintenance", methods=["GET"])
+    @profile_auth_optional
+    async def get_maintenance_status(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Get maintenance mode status for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        allowlist = await queries.get_maintenance_allowlist(profile.id)
+
+        return jsonify(
+            {
+                "maintenance_mode": profile.maintenance_mode,
+                "allowlist": allowlist,
+            }
+        ), 200
+
+    @bp.route("/profiles/<profile_name>/maintenance", methods=["POST"])
+    @profile_auth_optional
+    async def enable_maintenance_mode(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Enable maintenance mode for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        data = await request.get_json() or {}
+        initial_allowlist = data.get("allowlist", [])
+
+        # Enable maintenance mode
+        await queries.set_maintenance_mode(profile.id, True)
+
+        # Set initial allowlist if provided
+        if initial_allowlist:
+            await queries.set_maintenance_allowlist(profile.id, initial_allowlist)
+
+        return jsonify(
+            {
+                "message": "Maintenance mode enabled",
+                "maintenance_mode": True,
+                "allowlist": initial_allowlist,
+            }
+        ), 200
+
+    @bp.route("/profiles/<profile_name>/maintenance", methods=["DELETE"])
+    @profile_auth_optional
+    async def disable_maintenance_mode(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Disable maintenance mode for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        await queries.set_maintenance_mode(profile.id, False)
+
+        return jsonify(
+            {
+                "message": "Maintenance mode disabled",
+                "maintenance_mode": False,
+            }
+        ), 200
+
+    @bp.route("/profiles/<profile_name>/maintenance/allowlist", methods=["GET"])
+    @profile_auth_optional
+    async def get_maintenance_allowlist(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Get the maintenance mode allowlist for a profile."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        allowlist = await queries.get_maintenance_allowlist(profile.id)
+
+        return jsonify({"allowlist": allowlist}), 200
+
+    @bp.route("/profiles/<profile_name>/maintenance/allowlist", methods=["PUT"])
+    @profile_auth_optional
+    async def set_maintenance_allowlist(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Set the maintenance mode allowlist for a profile (replaces existing)."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        allowlist = data.get("allowlist", [])
+        if not isinstance(allowlist, list):
+            return jsonify({"error": "allowlist must be a list of domains"}), 400
+
+        await queries.set_maintenance_allowlist(profile.id, allowlist)
+
+        return jsonify({"message": "Allowlist updated", "allowlist": allowlist}), 200
+
+    @bp.route("/profiles/<profile_name>/maintenance/allowlist", methods=["POST"])
+    @profile_auth_optional
+    async def add_maintenance_allowlist_domain(
+        profile_name: str, profile: Profile = None
+    ) -> tuple[dict[str, Any], int]:
+        """Add a domain to the maintenance mode allowlist."""
+        if not profile:
+            profile = await queries.get_profile_by_name(profile_name)
+            if not profile:
+                return jsonify({"error": "Profile not found"}), 404
+
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        domain = data.get("domain", "").strip().lower()
+        if not domain:
+            return jsonify({"error": "domain required"}), 400
+
+        await queries.add_maintenance_allowlist_domain(profile.id, domain)
+
+        return jsonify({"message": f"Domain {domain} added to allowlist"}), 200
 
     # =========================================================================
     # Admin API
@@ -519,28 +1023,32 @@ def create_api_blueprint() -> Blueprint:
         session.pop("is_admin", None)
         return jsonify({"message": "Logged out"}), 200
 
-    @bp.route("/admin/clients", methods=["GET"])
+    @bp.route("/admin/profiles", methods=["GET"])
     @admin_required
-    async def admin_list_clients() -> tuple[dict[str, Any], int]:
-        """List all clients (admin only)."""
-        clients = await queries.list_clients()
+    async def admin_list_profiles() -> tuple[dict[str, Any], int]:
+        """List all profiles (admin only)."""
+        profiles = await queries.list_profiles()
         result = []
 
-        for c in clients:
-            stats = await queries.get_client_stats(c.id)
+        for p in profiles:
+            stats = await queries.get_profile_stats(p.id)
+            devices = await queries.list_devices(p.id)
             result.append(
                 {
-                    "id": str(c.id),
-                    "name": c.name,
-                    "has_password": c.password_hash is not None,
-                    "is_filtering_paused": c.is_filtering_paused,
+                    "id": str(p.id),
+                    "name": p.name,
+                    "description": p.description,
+                    "has_password": p.password_hash is not None,
+                    "is_filtering_paused": p.is_filtering_paused,
+                    "maintenance_mode": p.maintenance_mode,
+                    "device_count": len(devices),
                     "total_queries_24h": stats.total_queries,
                     "blocked_percentage": round(stats.blocked_percentage, 1),
-                    "created_at": c.created_at.isoformat(),
+                    "created_at": p.created_at.isoformat(),
                 }
             )
 
-        return jsonify({"clients": result}), 200
+        return jsonify({"profiles": result}), 200
 
     @bp.route("/admin/stats", methods=["GET"])
     @admin_required
@@ -551,7 +1059,8 @@ def create_api_blueprint() -> Blueprint:
 
         return jsonify(
             {
-                "total_clients": stats.total_clients,
+                "total_profiles": stats.total_profiles,
+                "total_devices": stats.total_devices,
                 "total_queries_today": stats.total_queries_today,
                 "total_blocked_today": stats.total_blocked_today,
                 "blocked_percentage": (
@@ -624,6 +1133,146 @@ def create_api_blueprint() -> Blueprint:
         if not result:
             return jsonify({"error": "Blocklist not found"}), 404
         return jsonify({"message": "Blocklist disabled"}), 200
+
+    # =========================================================================
+    # Admin Preset Management
+    # =========================================================================
+
+    @bp.route("/admin/presets", methods=["POST"])
+    @admin_required
+    async def admin_create_preset() -> tuple[dict[str, Any], int]:
+        """Create a custom preset (admin only)."""
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        preset_id = data.get("id", "").strip().lower()
+        name = data.get("name", "").strip()
+        category = data.get("category", "").strip()
+        description = data.get("description")
+        domains = data.get("domains", [])
+
+        if not preset_id:
+            return jsonify({"error": "Preset ID required"}), 400
+        if not name:
+            return jsonify({"error": "Preset name required"}), 400
+        if not category:
+            return jsonify({"error": "Preset category required"}), 400
+
+        # Validate preset_id format
+        if not preset_id.replace("-", "").isalnum():
+            return jsonify({"error": "Invalid preset ID. Use letters, numbers, and hyphens."}), 400
+
+        # Check if preset already exists
+        if await queries.preset_exists(preset_id):
+            return jsonify({"error": "Preset ID already exists"}), 409
+
+        try:
+            # Create preset
+            preset = await queries.create_preset(
+                preset_id=preset_id,
+                name=name,
+                category=category,
+                description=description,
+                is_builtin=False,
+            )
+
+            # Set domains
+            if domains:
+                await queries.set_preset_domains(preset_id, domains)
+
+            # Load into engine
+            engine = get_engine()
+            await reload_preset_in_engine(engine, preset_id)
+
+            return jsonify(
+                {
+                    "id": preset.id,
+                    "name": preset.name,
+                    "category": preset.category,
+                    "description": preset.description,
+                    "domain_count": len(domains),
+                }
+            ), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @bp.route("/admin/presets/<preset_id>", methods=["GET"])
+    @admin_required
+    async def admin_get_preset(preset_id: str) -> tuple[dict[str, Any], int]:
+        """Get a preset with its domains (admin only)."""
+        preset = await queries.get_preset(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found"}), 404
+
+        domains = await queries.get_preset_domains(preset_id)
+
+        return jsonify(
+            {
+                "id": preset.id,
+                "name": preset.name,
+                "description": preset.description,
+                "category": preset.category,
+                "is_builtin": preset.is_builtin,
+                "domains": domains,
+                "domain_count": len(domains),
+            }
+        ), 200
+
+    @bp.route("/admin/presets/<preset_id>", methods=["PUT"])
+    @admin_required
+    async def admin_update_preset(preset_id: str) -> tuple[dict[str, Any], int]:
+        """Update a preset's domains (admin only)."""
+        preset = await queries.get_preset(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found"}), 404
+
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        domains = data.get("domains", [])
+        if not isinstance(domains, list):
+            return jsonify({"error": "domains must be a list"}), 400
+
+        # Update domains
+        await queries.set_preset_domains(preset_id, domains)
+
+        # Reload in engine
+        engine = get_engine()
+        await reload_preset_in_engine(engine, preset_id)
+
+        return jsonify(
+            {
+                "message": "Preset updated",
+                "domain_count": len(domains),
+            }
+        ), 200
+
+    @bp.route("/admin/presets/<preset_id>", methods=["DELETE"])
+    @admin_required
+    async def admin_delete_preset(preset_id: str) -> tuple[dict[str, Any], int]:
+        """Delete a custom preset (admin only).
+
+        Built-in presets cannot be deleted.
+        """
+        preset = await queries.get_preset(preset_id)
+        if not preset:
+            return jsonify({"error": "Preset not found"}), 404
+
+        if preset.is_builtin:
+            return jsonify({"error": "Cannot delete built-in presets"}), 403
+
+        # Delete from DB
+        deleted = await queries.delete_preset(preset_id)
+        if not deleted:
+            return jsonify({"error": "Failed to delete preset"}), 500
+
+        # Remove from engine
+        engine = get_engine()
+        remove_preset_from_engine(engine, preset_id)
+
+        return jsonify({"message": "Preset deleted"}), 200
 
     # =========================================================================
     # Health Check

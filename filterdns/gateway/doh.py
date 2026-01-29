@@ -8,7 +8,7 @@ import structlog
 from quart import Blueprint, Response, request
 
 from filterdns.dns.filter import DNSFilter, get_filter
-from filterdns.gateway.client_resolver import ClientResolver, get_client_resolver
+from filterdns.gateway.client_resolver import ProfileResolver, get_profile_resolver
 
 logger = structlog.get_logger()
 
@@ -18,20 +18,20 @@ DNS_MESSAGE_TYPE = "application/dns-message"
 
 def create_doh_blueprint(
     dns_filter: DNSFilter | None = None,
-    client_resolver: ClientResolver | None = None,
+    profile_resolver: ProfileResolver | None = None,
 ) -> Blueprint:
     """Create the DoH Blueprint.
 
     Args:
         dns_filter: DNS filter instance
-        client_resolver: Client resolver instance
+        profile_resolver: Profile resolver instance
 
     Returns:
         Quart Blueprint with DoH routes
     """
     bp = Blueprint("doh", __name__)
     _dns_filter = dns_filter or get_filter()
-    _client_resolver = client_resolver or get_client_resolver()
+    _profile_resolver = profile_resolver or get_profile_resolver()
 
     @bp.route("/dns-query", methods=["GET", "POST"])
     async def dns_query() -> Response:
@@ -67,12 +67,12 @@ def create_doh_blueprint(
             # Parse DNS query
             query = dns.message.from_wire(dns_data)
 
-            # Get client from subdomain
+            # Get profile from subdomain
             host = request.host
-            client = await _client_resolver.resolve_from_subdomain(host)
+            profile = await _profile_resolver.resolve_from_subdomain(host)
 
             # Filter the query
-            result = await _dns_filter.filter_query(query, client)
+            result = await _dns_filter.filter_query(query, profile)
 
             # Log the request
             if query.question:
@@ -81,7 +81,7 @@ def create_doh_blueprint(
                     "DoH query processed",
                     domain=domain,
                     host=host,
-                    client_name=client.name if client else None,
+                    profile_name=profile.name if profile else None,
                     blocked=result.blocked,
                     response_time_ms=result.response_time_ms,
                 )
@@ -119,12 +119,12 @@ def create_doh_blueprint(
             # Create a DNS query
             query = dns.message.make_query(name, rdtype)
 
-            # Get client from subdomain
+            # Get profile from subdomain
             host = request.host
-            client = await _client_resolver.resolve_from_subdomain(host)
+            profile = await _profile_resolver.resolve_from_subdomain(host)
 
             # Filter the query
-            result = await _dns_filter.filter_query(query, client)
+            result = await _dns_filter.filter_query(query, profile)
 
             # Convert response to JSON format
             response = result.response

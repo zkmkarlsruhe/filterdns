@@ -1,96 +1,100 @@
-"""Client resolution from DNS requests.
+"""Profile resolution from DNS requests.
 
-Identifies clients by:
-- DoH/DoT: Subdomain from Host header or SNI (e.g., my-devices.filterdns.zkm.de)
-- Legacy DNS: Source IP lookup in linked_devices table
+Naming convention (museum-focused):
+- Profile: DNS filtering configuration (e.g., "ps5-gaming-exhibition")
+- Device: Individual machine using a profile (e.g., PS5 in Hall 3)
+
+Identifies profiles by:
+- DoH/DoT: Subdomain from Host header or SNI (e.g., ps5-gaming.filterdns.zkm.de)
+- Legacy DNS: Source IP lookup in devices table
 """
 
 import structlog
 
 from filterdns.config import settings
 from filterdns.db import queries
-from filterdns.db.models import Client
+from filterdns.db.models import Profile
 from filterdns.dns.resolver import get_resolver
 
 logger = structlog.get_logger()
 
 
-class ClientResolver:
-    """Resolves client configuration from request context."""
+class ProfileResolver:
+    """Resolves profile configuration from request context."""
 
     def __init__(self, domain: str | None = None):
         self.domain = domain or settings.domain
 
-    async def resolve_from_subdomain(self, host: str) -> Client | None:
-        """Resolve client from subdomain in Host header or SNI.
+    async def resolve_from_subdomain(self, host: str) -> Profile | None:
+        """Resolve profile from subdomain in Host header or SNI.
 
         Args:
-            host: Full hostname (e.g., "my-devices.filterdns.zkm.de")
+            host: Full hostname (e.g., "ps5-gaming.filterdns.zkm.de")
 
         Returns:
-            Client configuration or None if not found
+            Profile configuration or None if not found
         """
         # Extract subdomain
-        client_name = self._extract_subdomain(host)
-        if not client_name:
-            return await self._get_default_client()
+        profile_name = self._extract_subdomain(host)
+        if not profile_name:
+            return await self._get_default_profile()
 
-        # Look up client by name
-        client = await queries.get_client_by_name(client_name)
-        if client:
-            logger.debug("Client resolved from subdomain", client_name=client_name)
-            return client
+        # Look up profile by name
+        profile = await queries.get_profile_by_name(profile_name)
+        if profile:
+            logger.debug("Profile resolved from subdomain", profile_name=profile_name)
+            return profile
 
-        # Client not found, return default
-        logger.debug("Client not found, using default", requested_name=client_name)
-        return await self._get_default_client()
+        # Profile not found, return default
+        logger.debug("Profile not found, using default", requested_name=profile_name)
+        return await self._get_default_profile()
 
-    async def resolve_from_ip(self, ip_address: str) -> Client | None:
-        """Resolve client from source IP address.
+    async def resolve_from_ip(self, ip_address: str) -> Profile | None:
+        """Resolve profile from source IP address.
 
         Args:
-            ip_address: Client IP address
+            ip_address: Device IP address
 
         Returns:
-            Client configuration or None if not found
+            Profile configuration or None if not found
         """
-        # Check linked devices first
-        client = await queries.get_client_by_ip(ip_address)
-        if client:
-            logger.debug("Client resolved from IP", ip=ip_address, client_name=client.name)
-            return client
+        # Check devices table
+        profile = await queries.get_profile_by_device_ip(ip_address)
+        if profile:
+            logger.debug("Profile resolved from IP", ip=ip_address, profile_name=profile.name)
+            return profile
 
         # Try reverse DNS if PTR server is configured
         if settings.ptr_server:
             hostname = await get_resolver().reverse_lookup(ip_address)
             if hostname:
-                # Extract potential client name from hostname
+                # Extract potential profile name from hostname
                 # e.g., "lobby-display.zkm.local" -> "lobby-display"
                 parts = hostname.split(".")
                 if parts:
-                    client_name = parts[0]
-                    client = await queries.get_client_by_name(client_name)
-                    if client:
+                    profile_name = parts[0]
+                    profile = await queries.get_profile_by_name(profile_name)
+                    if profile:
                         logger.debug(
-                            "Client resolved from PTR",
+                            "Profile resolved from PTR",
                             ip=ip_address,
                             hostname=hostname,
-                            client_name=client_name,
+                            profile_name=profile_name,
                         )
-                        return client
+                        return profile
 
-        # Return default client
-        logger.debug("No client for IP, using default", ip=ip_address)
-        return await self._get_default_client()
+        # Return default profile
+        logger.debug("No profile for IP, using default", ip=ip_address)
+        return await self._get_default_profile()
 
     def _extract_subdomain(self, host: str) -> str | None:
-        """Extract client name from host.
+        """Extract profile name from host.
 
         Args:
             host: Full hostname
 
         Returns:
-            Subdomain/client name or None if it's the base domain
+            Subdomain/profile name or None if it's the base domain
         """
         # Remove port if present
         host = host.split(":")[0].lower()
@@ -111,18 +115,26 @@ class ClientResolver:
 
         return subdomain
 
-    async def _get_default_client(self) -> Client | None:
-        """Get the default client configuration."""
-        return await queries.get_client_by_name(settings.default_client)
+    async def _get_default_profile(self) -> Profile | None:
+        """Get the default profile configuration."""
+        return await queries.get_profile_by_name(settings.default_client)
 
 
-# Global client resolver instance
-_client_resolver: ClientResolver | None = None
+# Backwards compatibility alias
+ClientResolver = ProfileResolver
 
 
-def get_client_resolver() -> ClientResolver:
-    """Get the global client resolver instance."""
-    global _client_resolver
-    if _client_resolver is None:
-        _client_resolver = ClientResolver()
-    return _client_resolver
+# Global profile resolver instance
+_profile_resolver: ProfileResolver | None = None
+
+
+def get_profile_resolver() -> ProfileResolver:
+    """Get the global profile resolver instance."""
+    global _profile_resolver
+    if _profile_resolver is None:
+        _profile_resolver = ProfileResolver()
+    return _profile_resolver
+
+
+# Backwards compatibility alias
+get_client_resolver = get_profile_resolver

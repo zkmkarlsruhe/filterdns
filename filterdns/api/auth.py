@@ -32,38 +32,38 @@ def admin_required(f: Callable) -> Callable:
     return decorated_function
 
 
-def client_auth_optional(f: Callable) -> Callable:
-    """Decorator for optional client password authentication.
+def profile_auth_optional(f: Callable) -> Callable:
+    """Decorator for optional profile password authentication.
 
-    If the client has a password set, validates the Authorization header.
+    If the profile has a password set, validates the Authorization header.
     """
 
     @wraps(f)
     async def decorated_function(*args: Any, **kwargs: Any) -> Any:
-        client_name = kwargs.get("client_name")
-        if not client_name:
+        profile_name = kwargs.get("profile_name")
+        if not profile_name:
             return await f(*args, **kwargs)
 
-        client = await queries.get_client_by_name(client_name)
-        if not client:
-            return jsonify({"error": "Client not found"}), 404
+        profile = await queries.get_profile_by_name(profile_name)
+        if not profile:
+            return jsonify({"error": "Profile not found"}), 404
 
-        # If client has no password, allow access
-        if not client.password_hash:
-            kwargs["client"] = client
+        # If profile has no password, allow access
+        if not profile.password_hash:
+            kwargs["profile"] = profile
             return await f(*args, **kwargs)
 
         # Check Authorization header
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             password = auth[7:]
-            if bcrypt.checkpw(password.encode(), client.password_hash.encode()):
-                kwargs["client"] = client
+            if bcrypt.checkpw(password.encode(), profile.password_hash.encode()):
+                kwargs["profile"] = profile
                 return await f(*args, **kwargs)
 
         # Check session
-        if session.get(f"client_{client.id}"):
-            kwargs["client"] = client
+        if session.get(f"profile_{profile.id}"):
+            kwargs["profile"] = profile
             return await f(*args, **kwargs)
 
         return jsonify({"error": "Authentication required"}), 401
@@ -76,6 +76,6 @@ async def verify_admin_password(password: str) -> bool:
     return password == settings.admin_password
 
 
-async def verify_client_password(client_id: UUID, password: str) -> bool:
-    """Verify client password."""
-    return await queries.verify_client_password(client_id, password)
+async def verify_profile_password(profile_id: UUID, password: str) -> bool:
+    """Verify profile password."""
+    return await queries.verify_profile_password(profile_id, password)

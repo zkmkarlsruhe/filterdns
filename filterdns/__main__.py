@@ -45,6 +45,7 @@ async def run_servers() -> None:
     config.bind = [f"0.0.0.0:{settings.admin_port}"]
     config.accesslog = "-"
     config.errorlog = "-"
+    config.startup_timeout = 300  # 5 minutes for blocklist loading
 
     # TLS for DoH (if configured)
     if settings.has_tls:

@@ -12,7 +12,7 @@ import dns.rcode
 
 from filterdns.blocklist.engine import BlocklistEngine
 from filterdns.dns.filter import DNSFilter, FilterResult
-from filterdns.gateway.client_resolver import ClientResolver
+from filterdns.gateway.client_resolver import ProfileResolver
 from filterdns.gateway.doh import create_doh_blueprint
 from filterdns.gateway.dns53 import DNS53Protocol, DNS53TCPHandler
 from filterdns.app import create_app
@@ -32,12 +32,12 @@ def make_dns_query_base64url(domain: str, rdtype: str = "A") -> str:
     return encoded
 
 
-class TestClientResolver:
+class TestProfileResolver:
     """Tests for client resolution from requests."""
 
     def test_extract_subdomain(self):
         """Test extracting client name from hostname."""
-        resolver = ClientResolver(domain="filterdns.example.com")
+        resolver = ProfileResolver(domain="filterdns.example.com")
 
         # Valid subdomain
         assert resolver._extract_subdomain("mydevices.filterdns.example.com") == "mydevices"
@@ -54,7 +54,7 @@ class TestClientResolver:
 
     def test_extract_subdomain_case_insensitive(self):
         """Test that subdomain extraction is case-insensitive."""
-        resolver = ClientResolver(domain="filterdns.example.com")
+        resolver = ProfileResolver(domain="filterdns.example.com")
 
         assert resolver._extract_subdomain("MyDevices.FilterDNS.Example.COM") == "mydevices"
         assert resolver._extract_subdomain("TEST.FILTERDNS.EXAMPLE.COM") == "test"
@@ -64,7 +64,7 @@ class TestClientResolver:
         """Test resolving client from subdomain."""
         from filterdns.db.models import Client
 
-        resolver = ClientResolver(domain="filterdns.example.com")
+        resolver = ProfileResolver(domain="filterdns.example.com")
 
         now = datetime.now(timezone.utc)
         mock_client = Client(
@@ -77,20 +77,20 @@ class TestClientResolver:
         )
 
         with patch("filterdns.gateway.client_resolver.queries") as mock_queries:
-            mock_queries.get_client_by_name = AsyncMock(return_value=mock_client)
+            mock_queries.get_profile_by_name = AsyncMock(return_value=mock_client)
 
             client = await resolver.resolve_from_subdomain("mydevices.filterdns.example.com")
 
             assert client is not None
             assert client.name == "mydevices"
-            mock_queries.get_client_by_name.assert_called_with("mydevices")
+            mock_queries.get_profile_by_name.assert_called_with("mydevices")
 
     @pytest.mark.asyncio
     async def test_resolve_from_subdomain_not_found(self):
         """Test resolving unknown client falls back to default."""
         from filterdns.db.models import Client
 
-        resolver = ClientResolver(domain="filterdns.example.com")
+        resolver = ProfileResolver(domain="filterdns.example.com")
 
         now = datetime.now(timezone.utc)
         default_client = Client(
@@ -104,7 +104,7 @@ class TestClientResolver:
 
         with patch("filterdns.gateway.client_resolver.queries") as mock_queries:
             # First call (lookup) returns None, second call (default) returns default
-            mock_queries.get_client_by_name = AsyncMock(
+            mock_queries.get_profile_by_name = AsyncMock(
                 side_effect=[None, default_client]
             )
 
@@ -119,7 +119,7 @@ class TestClientResolver:
         """Test resolving client from IP address."""
         from filterdns.db.models import Client
 
-        resolver = ClientResolver(domain="filterdns.example.com")
+        resolver = ProfileResolver(domain="filterdns.example.com")
 
         now = datetime.now(timezone.utc)
         mock_client = Client(
@@ -132,13 +132,13 @@ class TestClientResolver:
         )
 
         with patch("filterdns.gateway.client_resolver.queries") as mock_queries:
-            mock_queries.get_client_by_ip = AsyncMock(return_value=mock_client)
+            mock_queries.get_profile_by_device_ip = AsyncMock(return_value=mock_client)
 
             client = await resolver.resolve_from_ip("192.168.1.100")
 
             assert client is not None
             assert client.name == "lobby-display"
-            mock_queries.get_client_by_ip.assert_called_with("192.168.1.100")
+            mock_queries.get_profile_by_device_ip.assert_called_with("192.168.1.100")
 
 
 class TestDoHEndpoint:
@@ -151,14 +151,14 @@ class TestDoHEndpoint:
         return mock
 
     @pytest.fixture
-    def mock_client_resolver(self):
+    def mock_profile_resolver(self):
         """Create a mock client resolver."""
         mock = MagicMock()
         mock.resolve_from_subdomain = AsyncMock(return_value=None)
         return mock
 
     @pytest.fixture
-    def doh_app(self, mock_filter, mock_client_resolver):
+    def doh_app(self, mock_filter, mock_profile_resolver):
         """Create test app with injected mock dependencies."""
         from quart import Quart
 
@@ -166,10 +166,10 @@ class TestDoHEndpoint:
         # Create blueprint with injected mocks
         bp = create_doh_blueprint(
             dns_filter=mock_filter,
-            client_resolver=mock_client_resolver,
+            profile_resolver=mock_profile_resolver,
         )
         app.register_blueprint(bp)
-        return app, mock_filter, mock_client_resolver
+        return app, mock_filter, mock_profile_resolver
 
     @pytest.mark.asyncio
     async def test_doh_get_request(self, doh_app):
@@ -291,7 +291,7 @@ class TestDoHJsonResolve:
         app = Quart(__name__)
         bp = create_doh_blueprint(
             dns_filter=mock_filter,
-            client_resolver=mock_resolver,
+            profile_resolver=mock_resolver,
         )
         app.register_blueprint(bp)
         return app, mock_filter

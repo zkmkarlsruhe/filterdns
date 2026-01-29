@@ -1,0 +1,150 @@
+# Built-in Presets for FilterDNS
+# These presets are loaded on first startup and marked as is_builtin=True
+# Built-in presets cannot be deleted via the API
+
+presets:
+  # ============================================================================
+  # OS Updates
+  # ============================================================================
+
+  - id: windows-updates
+    name: Block Windows Updates
+    description: Block Windows Update and Microsoft software update domains
+    category: os-updates
+    domains:
+      - windowsupdate.com
+      - update.microsoft.com
+      - download.microsoft.com
+      - ntservicepack.microsoft.com
+      - wustat.windows.com
+      - delivery.mp.microsoft.com
+      - windowsupdate.microsoft.com
+      - download.windowsupdate.com
+      - ctldl.windowsupdate.com
+      - au.download.windowsupdate.com
+
+  - id: macos-updates
+    name: Block macOS Updates
+    description: Block Apple software update and recovery domains
+    category: os-updates
+    domains:
+      - swscan.apple.com
+      - swcdn.apple.com
+      - swdist.apple.com
+      - updates.cdn-apple.com
+      - mesu.apple.com
+      - osrecovery.apple.com
+      - oscdn.apple.com
+      - appldnld.apple.com
+      - updates-http.cdn-apple.com
+      - updates.apple.com
+
+  # ============================================================================
+  # Gaming Updates
+  # ============================================================================
+
+  - id: playstation-updates
+    name: Block PlayStation Updates
+    description: Block PS4/PS5 system and game updates
+    category: gaming-updates
+    domains:
+      - playstation.net
+      - playstation.com
+      - sonyentertainmentnetwork.com
+      - dl.playstation.net
+      - fus01.ps4.update.playstation.net
+      - feu01.ps4.update.playstation.net
+      - fus01.ps5.update.playstation.net
+      - feu01.ps5.update.playstation.net
+      - gs2.ww.prod.dl.playstation.net
+      - gs-sec.ww.np.dl.playstation.net
+      - apollo.dl.playstation.net
+      - ares.dl.playstation.net
+      - gst.prod.dl.playstation.net
+      - zeus.dl.playstation.net
+
+  - id: nintendo-updates
+    name: Block Nintendo Switch Updates
+    description: Block Nintendo Switch system and game updates
+    category: gaming-updates
+    domains:
+      - nintendo.net
+      - nintendo.com
+      - nintendowifi.net
+      - d4c.nintendo.net
+      - ctest.cdn.nintendo.net
+      - conntest.nintendowifi.net
+      - sun.hac.lp1.d4c.nintendo.net
+      - aqua.hac.lp1.d4c.nintendo.net
+      - atum.hac.lp1.d4c.nintendo.net
+      - superfly.hac.lp1.d4c.nintendo.net
+      - atumn.hac.lp1.d4c.nintendo.net
+
+  - id: xbox-updates
+    name: Block Xbox Updates
+    description: Block Xbox system and game updates
+    category: gaming-updates
+    domains:
+      - xboxlive.com
+      - xbox.com
+      - xboxservices.com
+      - xboxcontent.com
+      - update.xboxlive.com
+      - xboxone.loris.llnwd.net
+      - assets1.xboxlive.com
+      - assets2.xboxlive.com
+      - dlassets.xboxlive.com
+      - dlassets2.xboxlive.com
+      - d1.xboxlive.com
+      - d2.xboxlive.com
+
+  # ============================================================================
+  # Smart TV Telemetry
+  # ============================================================================
+
+  - id: samsung-tv
+    name: Block Samsung TV Telemetry
+    description: Block Samsung Smart TV tracking and advertising
+    category: smart-tv
+    domains:
+      - samsungads.com
+      - samsungacr.com
+      - samsungqbe.com
+      - samsungcloudsolution.com
+      - samsungcloudsolution.net
+      - samsungotn.net
+      - samsung-tvads.com
+      - pavv.co.kr
+      - infolink.pavv.co.kr
+      - sas.samsung.com
+      - configprd.samsungcloudsolution.net
+
+  - id: lg-tv
+    name: Block LG TV Telemetry
+    description: Block LG Smart TV tracking and advertising
+    category: smart-tv
+    domains:
+      - lgsmartad.com
+      - lgtviot.com
+      - lgappstv.com
+      - lgtvcommon.com
+      - lge.com
+      - ibis.lgappstv.com
+      - lgad.cjpowercast.com
+      - edgesuite.net
+      - us.ad.lgsmartad.com
+      - kr.ad.lgsmartad.com
+
+  - id: android-tv
+    name: Block Android TV Telemetry
+    description: Block Android TV and Google TV tracking
+    category: smart-tv
+    domains:
+      - androidtv.googleapis.com
+      - android.clients.google.com
+      - androidtvchannels-pa.googleapis.com
+      - footprints-pa.googleapis.com
+      - gstatic.com
+      - play.google.com
+      - android.googleapis.com
+      - fonts.gstatic.com

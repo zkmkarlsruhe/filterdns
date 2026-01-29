@@ -126,7 +126,7 @@ class TestDNSFilterIntegration:
 
         filter.resolver = MockResolver()
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is True
         assert result.blocklist_id == "test-ads"
@@ -155,7 +155,7 @@ class TestDNSFilterIntegration:
 
         filter.resolver = MockResolver()
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is False
         assert result.blocklist_id is None
@@ -183,7 +183,7 @@ class TestDNSFilterIntegration:
 
         # Test subdomain
         query = make_query("deep.sub.example.com")
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is True
 
@@ -196,7 +196,7 @@ class TestDNSFilterIntegration:
         query = dns.message.Message()
         query.id = 12345
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is False
         assert result.response.rcode() == dns.rcode.FORMERR
@@ -225,7 +225,7 @@ class TestDNSFilterQueryTypes:
 
         filter.resolver = MockResolver()
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is True
 
@@ -249,7 +249,7 @@ class TestDNSFilterQueryTypes:
 
         filter.resolver = MockResolver()
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is True
 
@@ -273,6 +273,6 @@ class TestDNSFilterQueryTypes:
 
         filter.resolver = MockResolver()
 
-        result = await filter.filter_query(query, client=None)
+        result = await filter.filter_query(query, profile=None)
 
         assert result.blocked is True

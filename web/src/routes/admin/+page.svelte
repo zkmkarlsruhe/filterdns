@@ -3,16 +3,16 @@
 	import {
 		adminLogin,
 		adminLogout,
-		adminGetClients,
+		adminGetProfiles,
 		adminGetStats,
-		type AdminClient,
+		type AdminProfile,
 		type GlobalStats
 	} from '$lib/api';
 	import { isAdmin, toasts } from '$lib/stores';
 
 	let password = '';
 	let loggingIn = false;
-	let clients: AdminClient[] = [];
+	let profiles: AdminProfile[] = [];
 	let stats: GlobalStats | null = null;
 	let loading = true;
 
@@ -40,16 +40,16 @@
 	async function handleLogout() {
 		await adminLogout();
 		isAdmin.set(false);
-		clients = [];
+		profiles = [];
 		stats = null;
 	}
 
 	async function loadData() {
 		loading = true;
-		const [clientsResult, statsResult] = await Promise.all([adminGetClients(), adminGetStats()]);
+		const [profilesResult, statsResult] = await Promise.all([adminGetProfiles(), adminGetStats()]);
 
-		if (clientsResult.data) {
-			clients = clientsResult.data.clients;
+		if (profilesResult.data) {
+			profiles = profilesResult.data.profiles;
 		}
 		if (statsResult.data) {
 			stats = statsResult.data;
@@ -92,8 +92,8 @@
 			{#if stats}
 				<section class="stats-grid">
 					<div class="stat-card">
-						<div class="stat-value">{stats.total_clients}</div>
-						<div class="stat-label">Total Clients</div>
+						<div class="stat-value">{stats.total_profiles}</div>
+						<div class="stat-label">Total Profiles</div>
 					</div>
 					<div class="stat-card">
 						<div class="stat-value">{stats.total_queries_today.toLocaleString()}</div>
@@ -119,8 +119,8 @@
 			{/if}
 
 			<section class="card">
-				<h2>All Clients</h2>
-				{#if clients.length > 0}
+				<h2>All Profiles</h2>
+				{#if profiles.length > 0}
 					<div class="table-wrapper">
 						<table>
 							<thead>
@@ -133,31 +133,31 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each clients as client}
+								{#each profiles as profile}
 									<tr>
 										<td>
-											<a href="/client/{client.name}">{client.name}</a>
-											{#if client.has_password}
+											<a href="/profile/{profile.name}">{profile.name}</a>
+											{#if profile.has_password}
 												<span class="badge">Password</span>
 											{/if}
 										</td>
-										<td>{client.total_queries_24h.toLocaleString()}</td>
-										<td>{client.blocked_percentage}%</td>
+										<td>{profile.total_queries_24h.toLocaleString()}</td>
+										<td>{profile.blocked_percentage}%</td>
 										<td>
-											{#if client.is_filtering_paused}
+											{#if profile.is_filtering_paused}
 												<span class="status-paused">Paused</span>
 											{:else}
 												<span class="status-active">Active</span>
 											{/if}
 										</td>
-										<td>{new Date(client.created_at).toLocaleDateString()}</td>
+										<td>{new Date(profile.created_at).toLocaleDateString()}</td>
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
 				{:else}
-					<p class="empty">No clients yet</p>
+					<p class="empty">No profiles yet</p>
 				{/if}
 			</section>
 

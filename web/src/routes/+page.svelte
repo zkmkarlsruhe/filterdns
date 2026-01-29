@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { createClient, getBlocklists, type Blocklist } from '$lib/api';
+	import { createProfile, getProfile, getBlocklists, type Blocklist } from '$lib/api';
 	import { toasts } from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 
-	let clientName = '';
+	let profileName = '';
 	let password = '';
-	let creating = false;
+	let loading = false;
 	let blocklists: Blocklist[] = [];
 
 	onMount(async () => {
@@ -16,32 +16,44 @@
 		}
 	});
 
-	async function handleCreate() {
-		if (!clientName.trim()) {
-			toasts.error('Please enter a client name');
+	async function handleSubmit() {
+		if (!profileName.trim()) {
+			toasts.error('Please enter a profile name');
 			return;
 		}
 
-		const name = clientName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-		if (name !== clientName.trim()) {
-			clientName = name;
+		const name = profileName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+		if (name !== profileName.trim()) {
+			profileName = name;
 		}
 
-		creating = true;
-		const result = await createClient(name, password || undefined);
-		creating = false;
+		loading = true;
 
-		if (result.error) {
-			toasts.error(result.error);
-		} else if (result.data) {
-			toasts.success(`Client "${name}" created!`);
-			goto(`/client/${name}`);
+		// First check if profile exists
+		const existingResult = await getProfile(name);
+
+		if (existingResult.data || existingResult.status === 401) {
+			// Profile exists - go to it (401 means it exists but needs password)
+			loading = false;
+			goto(`/profile/${name}`);
+			return;
+		}
+
+		// Profile doesn't exist (404) - create it
+		const createResult = await createProfile(name, password || undefined);
+		loading = false;
+
+		if (createResult.error) {
+			toasts.error(createResult.error);
+		} else if (createResult.data) {
+			toasts.success(`Profile "${name}" created!`);
+			goto(`/profile/${name}`);
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>FilterDNS - Create Client</title>
+	<title>FilterDNS</title>
 </svelte:head>
 
 <div class="landing">
@@ -50,22 +62,22 @@
 		<p class="tagline">Self-hosted DNS filtering for ZKM</p>
 	</div>
 
-	<div class="create-section">
+	<div class="access-section">
 		<div class="card">
-			<h2>Create New Client</h2>
+			<h2>Access Your Profile</h2>
 			<p class="description">
-				Create a configuration for your devices. Each client gets a unique DNS endpoint.
+				Enter your profile name to access settings, or create a new profile.
 			</p>
 
-			<form on:submit|preventDefault={handleCreate}>
+			<form on:submit|preventDefault={handleSubmit}>
 				<div class="form-group">
-					<label for="name">Client Name</label>
+					<label for="name">Profile Name</label>
 					<div class="input-with-suffix">
 						<input
 							type="text"
 							id="name"
-							bind:value={clientName}
-							placeholder="my-devices"
+							bind:value={profileName}
+							placeholder="my-profile"
 							pattern="[a-z0-9-]+"
 							maxlength="63"
 							required
@@ -76,18 +88,18 @@
 				</div>
 
 				<div class="form-group">
-					<label for="password">Password (optional)</label>
+					<label for="password">Password (for new profiles)</label>
 					<input
 						type="password"
 						id="password"
 						bind:value={password}
-						placeholder="Protect your settings"
+						placeholder="Optional - protect your settings"
 					/>
-					<small>Set a password to protect your client's settings page</small>
+					<small>Leave blank if accessing an existing profile</small>
 				</div>
 
-				<button type="submit" class="btn btn-primary" disabled={creating}>
-					{creating ? 'Creating...' : 'Create Client'}
+				<button type="submit" class="btn btn-primary" disabled={loading}>
+					{loading ? 'Loading...' : 'Continue'}
 				</button>
 			</form>
 		</div>
