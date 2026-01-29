@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs
+*.egg
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Virtual environments
+venv
+.venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Node
+web/node_modules
+web/.svelte-kit
+
+# Environment files (but include example)
+.env
+.env.local
+.env.*.local
+
+# Data directories
+data
+certs
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+tests

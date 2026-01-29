@@ -1,0 +1,656 @@
+# FilterDNS Blocklists Configuration
+# Comprehensive collection of blocklists for various filtering needs
+# Enable per-client based on requirements
+
+blocklists:
+
+  # ============================================================================
+  # ADS & TRACKING - Core Lists (Recommended)
+  # ============================================================================
+
+  - id: hagezi-multi-normal
+    name: Hagezi Multi Normal
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/multi.txt
+    description: Balanced blocklist for ads, tracking, analytics (recommended)
+    category: ads
+
+  - id: hagezi-multi-pro
+    name: Hagezi Multi Pro
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt
+    description: Extended blocklist - more aggressive than normal
+    category: ads
+
+  - id: hagezi-multi-pro-plus
+    name: Hagezi Multi Pro++
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.plus.txt
+    description: Maximum blocking - may cause breakage
+    category: ads
+
+  - id: stevenblack-unified
+    name: StevenBlack Unified
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+    description: Classic unified hosts file
+    category: ads
+
+  - id: adguard-dns
+    name: AdGuard DNS Filter
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+    description: AdGuard DNS filter
+    category: ads
+
+  - id: easylist
+    name: EasyList
+    url: https://easylist.to/easylist/easylist.txt
+    description: Primary filter list for AdBlock
+    category: ads
+
+  - id: easyprivacy
+    name: EasyPrivacy
+    url: https://easylist.to/easylist/easyprivacy.txt
+    description: Privacy protection filter
+    category: ads
+
+  - id: oisd-small
+    name: OISD Small
+    url: https://small.oisd.nl/domainswild
+    description: Balanced blocklist from oisd.nl
+    category: ads
+
+  - id: oisd-big
+    name: OISD Big
+    url: https://big.oisd.nl/domainswild
+    description: Comprehensive blocklist from oisd.nl
+    category: ads
+
+  - id: adaway
+    name: AdAway
+    url: https://adaway.org/hosts.txt
+    description: AdAway default blocklist
+    category: ads
+
+  - id: someonewhocares
+    name: Dan Pollock's List
+    url: https://someonewhocares.org/hosts/hosts
+    description: Classic hosts file by Dan Pollock
+    category: ads
+
+  - id: pgl-yoyo
+    name: Peter Lowe's List
+    url: https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0
+    description: Ad server blocklist by Peter Lowe
+    category: ads
+
+  # ============================================================================
+  # SECURITY & MALWARE
+  # ============================================================================
+
+  - id: hagezi-tif
+    name: Hagezi Threat Intelligence
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/tif.txt
+    description: Malware, phishing, cryptomining, scam
+    category: malware
+
+  - id: urlhaus-malware
+    name: URLhaus Malware
+    url: https://urlhaus.abuse.ch/downloads/hostfile/
+    description: Malware URLs from abuse.ch
+    category: malware
+
+  - id: phishing-army
+    name: Phishing Army
+    url: https://phishing.army/download/phishing_army_blocklist.txt
+    description: Phishing domains blocklist
+    category: malware
+
+  - id: malwaredomains
+    name: Malware Domain List
+    url: https://www.malwaredomainlist.com/hostslist/hosts.txt
+    description: Malware domains
+    category: malware
+
+  - id: threatfox
+    name: ThreatFox IOCs
+    url: https://threatfox.abuse.ch/downloads/hostfile/
+    description: Threat indicators from abuse.ch
+    category: malware
+
+  - id: openphish
+    name: OpenPhish
+    url: https://openphish.com/feed.txt
+    description: Phishing URLs feed
+    category: malware
+
+  - id: ransomware-tracker
+    name: Ransomware Tracker
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/ransomware.txt
+    description: Known ransomware domains
+    category: malware
+
+  - id: nocoin
+    name: NoCoin
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/coinblocklist
+    description: Cryptocurrency mining scripts
+    category: malware
+
+  # ============================================================================
+  # ADULT / PORN CONTENT
+  # ============================================================================
+
+  - id: stevenblack-porn
+    name: StevenBlack Porn
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts
+    description: Adult/pornography blocking (76k+ domains)
+    category: adult
+
+  - id: oisd-nsfw
+    name: OISD NSFW
+    url: https://nsfw.oisd.nl/domainswild
+    description: Adult content from oisd.nl
+    category: adult
+
+  - id: sinfonietta-porn
+    name: Sinfonietta Porn
+    url: https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/pornography-hosts
+    description: Comprehensive pornography list (60k+ domains)
+    category: adult
+
+  - id: tiuxo-porn
+    name: Tiuxo Porn
+    url: https://raw.githubusercontent.com/tiuxo/hosts/master/porn
+    description: Porn sites blocklist
+    category: adult
+
+  - id: clefspeare-porn
+    name: Clefspeare Porn
+    url: https://raw.githubusercontent.com/chadmayfield/my-pihole-blocklists/master/lists/pi_blocklist_porn_all.list
+    description: Large porn blocklist
+    category: adult
+
+  - id: bigdargon-porn
+    name: BigDargon Porn
+    url: https://raw.githubusercontent.com/bigdargon/hostsVN/master/extensions/adult/hosts
+    description: Vietnamese adult content list
+    category: adult
+
+  # ============================================================================
+  # SOCIAL MEDIA
+  # ============================================================================
+
+  - id: stevenblack-social
+    name: StevenBlack Social
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-only/hosts
+    description: All major social media platforms
+    category: social
+
+  - id: sinfonietta-social
+    name: Sinfonietta Social
+    url: https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/social-hosts
+    description: Social media platforms
+    category: social
+
+  # Individual platform blocks
+  - id: block-facebook
+    name: Block Facebook/Meta
+    url: https://raw.githubusercontent.com/jmdugan/blocklists/master/corporations/facebook/all
+    description: Facebook, Instagram, WhatsApp, Messenger
+    category: social-facebook
+
+  - id: block-tiktok
+    name: Block TikTok
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/tiktokaliases
+    description: TikTok and ByteDance
+    category: social-tiktok
+
+  - id: block-twitter
+    name: Block Twitter/X
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/twitter
+    description: Twitter/X platform
+    category: social-twitter
+
+  - id: block-snapchat
+    name: Block Snapchat
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/snapchat
+    description: Snapchat
+    category: social-snapchat
+
+  - id: block-pinterest
+    name: Block Pinterest
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/pinterest
+    description: Pinterest
+    category: social-pinterest
+
+  - id: block-reddit
+    name: Block Reddit
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/reddit
+    description: Reddit
+    category: social-reddit
+
+  - id: block-linkedin
+    name: Block LinkedIn
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/linkedin
+    description: LinkedIn
+    category: social-linkedin
+
+  - id: block-discord
+    name: Block Discord
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/discord
+    description: Discord
+    category: social-discord
+
+  - id: block-telegram
+    name: Block Telegram
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/telegram
+    description: Telegram
+    category: social-telegram
+
+  - id: block-whatsapp
+    name: Block WhatsApp
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/whatsapp
+    description: WhatsApp
+    category: social-whatsapp
+
+  # ============================================================================
+  # GAMBLING & BETTING
+  # ============================================================================
+
+  - id: stevenblack-gambling
+    name: StevenBlack Gambling
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts
+    description: Gambling and betting sites
+    category: gambling
+
+  - id: sinfonietta-gambling
+    name: Sinfonietta Gambling
+    url: https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/gambling-hosts
+    description: Gambling sites
+    category: gambling
+
+  - id: betterblocker-gambling
+    name: BetterBlocker Gambling
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/gambling
+    description: Additional gambling sites
+    category: gambling
+
+  # ============================================================================
+  # DATING SITES
+  # ============================================================================
+
+  - id: ut1-dating
+    name: UT1 Dating Sites
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/dating
+    description: Dating and hookup sites
+    category: dating
+
+  - id: shallalist-dating
+    name: Shallalist Dating
+    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/dating.list
+    description: Dating sites from Shallalist
+    category: dating
+
+  # ============================================================================
+  # GAMING & ENTERTAINMENT DISTRACTIONS
+  # ============================================================================
+
+  - id: block-twitch
+    name: Block Twitch
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/twitch
+    description: Twitch streaming
+    category: gaming
+
+  - id: block-steam
+    name: Block Steam
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/steam
+    description: Steam gaming platform
+    category: gaming
+
+  - id: block-epicgames
+    name: Block Epic Games
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/epic
+    description: Epic Games store
+    category: gaming
+
+  - id: block-roblox
+    name: Block Roblox
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/roblox
+    description: Roblox gaming platform
+    category: gaming
+
+  - id: block-minecraft
+    name: Block Minecraft
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/minecraft
+    description: Minecraft servers
+    category: gaming
+
+  # ============================================================================
+  # STREAMING SERVICES
+  # ============================================================================
+
+  - id: block-netflix
+    name: Block Netflix
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/netflix
+    description: Netflix
+    category: streaming
+
+  - id: block-youtube
+    name: Block YouTube
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/youtube
+    description: YouTube
+    category: streaming
+
+  - id: block-spotify
+    name: Block Spotify
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/spotify
+    description: Spotify
+    category: streaming
+
+  - id: block-disney
+    name: Block Disney+
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/disney
+    description: Disney Plus
+    category: streaming
+
+  - id: block-primevideo
+    name: Block Prime Video
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/amazon-video
+    description: Amazon Prime Video
+    category: streaming
+
+  # ============================================================================
+  # PIRACY & TORRENTS
+  # ============================================================================
+
+  - id: sinfonietta-torrents
+    name: Sinfonietta Torrents
+    url: https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/proxies-and-vpns-hosts
+    description: Torrent sites and proxies
+    category: piracy
+
+  - id: ut1-warez
+    name: UT1 Warez
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/warez
+    description: Warez and piracy sites
+    category: piracy
+
+  - id: block-torrent
+    name: Torrent Sites
+    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/torrent.list
+    description: Torrent and P2P sites
+    category: piracy
+
+  # ============================================================================
+  # DRUGS & ILLEGAL
+  # ============================================================================
+
+  - id: ut1-drugs
+    name: UT1 Drugs
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/drugs
+    description: Drug-related sites
+    category: drugs
+
+  - id: shallalist-drugs
+    name: Shallalist Drugs
+    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/drugs.list
+    description: Drug-related content
+    category: drugs
+
+  # ============================================================================
+  # FAKE NEWS & MISINFORMATION
+  # ============================================================================
+
+  - id: stevenblack-fakenews
+    name: StevenBlack Fake News
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts
+    description: Fake news and misinformation
+    category: fakenews
+
+  - id: quidsup-fakenews
+    name: Quidsup Fake News
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/fakenews
+    description: Additional fake news sites
+    category: fakenews
+
+  # ============================================================================
+  # NATIVE TRACKING (App Telemetry)
+  # ============================================================================
+
+  - id: hagezi-native-amazon
+    name: Amazon Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.amazon.txt
+    description: Amazon/Alexa telemetry
+    category: tracking
+
+  - id: hagezi-native-apple
+    name: Apple Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.apple.txt
+    description: Apple telemetry
+    category: tracking
+
+  - id: hagezi-native-huawei
+    name: Huawei Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.huawei.txt
+    description: Huawei telemetry
+    category: tracking
+
+  - id: hagezi-native-windows
+    name: Windows Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.winoffice.txt
+    description: Windows/Office telemetry
+    category: tracking
+
+  - id: hagezi-native-tiktok
+    name: TikTok Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.tiktok.txt
+    description: TikTok tracking
+    category: tracking
+
+  - id: hagezi-native-lgwebos
+    name: LG WebOS Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.lgwebos.txt
+    description: LG Smart TV telemetry
+    category: tracking
+
+  - id: hagezi-native-vivo
+    name: Vivo Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.vivo.txt
+    description: Vivo phone telemetry
+    category: tracking
+
+  - id: hagezi-native-oppo
+    name: Oppo/Realme Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.oppo-realme.txt
+    description: Oppo/Realme telemetry
+    category: tracking
+
+  - id: hagezi-native-xiaomi
+    name: Xiaomi Tracking
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/native.xiaomi.txt
+    description: Xiaomi telemetry
+    category: tracking
+
+  # ============================================================================
+  # SMART TV & IOT
+  # ============================================================================
+
+  - id: smart-tv-block
+    name: Smart TV Blocklist
+    url: https://raw.githubusercontent.com/Perflyst/PiHoleBlocklist/master/SmartTV.txt
+    description: Smart TV tracking and ads
+    category: smarttv
+
+  - id: samsung-tv-block
+    name: Samsung TV Blocklist
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/samsung-smart-tv
+    description: Samsung Smart TV
+    category: smarttv
+
+  - id: android-tv-block
+    name: Android TV Blocklist
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/androidtv
+    description: Android TV tracking
+    category: smarttv
+
+  - id: firetv-block
+    name: Fire TV Blocklist
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/firetv
+    description: Amazon Fire TV
+    category: smarttv
+
+  - id: roku-block
+    name: Roku Blocklist
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/roku
+    description: Roku devices
+    category: smarttv
+
+  # ============================================================================
+  # BIG TECH BLOCKING
+  # ============================================================================
+
+  - id: block-google
+    name: Block Google
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/google-domains
+    description: All Google services
+    category: bigtech
+
+  - id: block-amazon
+    name: Block Amazon
+    url: https://raw.githubusercontent.com/jmdugan/blocklists/master/corporations/amazon/all
+    description: All Amazon services
+    category: bigtech
+
+  - id: block-microsoft
+    name: Block Microsoft
+    url: https://raw.githubusercontent.com/jmdugan/blocklists/master/corporations/microsoft/all
+    description: All Microsoft services
+    category: bigtech
+
+  - id: block-apple
+    name: Block Apple
+    url: https://raw.githubusercontent.com/jmdugan/blocklists/master/corporations/apple/all
+    description: All Apple services
+    category: bigtech
+
+  # ============================================================================
+  # VPN & PROXY (Prevent bypassing)
+  # ============================================================================
+
+  - id: block-vpn
+    name: Block VPN Services
+    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/vpn.list
+    description: VPN provider domains
+    category: vpn
+
+  - id: block-proxy
+    name: Block Proxy Services
+    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/proxy.list
+    description: Web proxies
+    category: vpn
+
+  - id: block-tor
+    name: Block Tor
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/tor
+    description: Tor network
+    category: vpn
+
+  # ============================================================================
+  # REGIONAL LISTS
+  # ============================================================================
+
+  - id: easylist-germany
+    name: EasyList Germany
+    url: https://easylist.to/easylistgermany/easylistgermany.txt
+    description: German ad servers
+    category: regional
+
+  - id: liste-fr
+    name: Liste FR
+    url: https://easylist-downloads.adblockplus.org/liste_fr.txt
+    description: French ad servers
+    category: regional
+
+  - id: easylist-china
+    name: EasyList China
+    url: https://easylist-downloads.adblockplus.org/easylistchina.txt
+    description: Chinese ad servers
+    category: regional
+
+  - id: easylist-dutch
+    name: EasyList Dutch
+    url: https://easylist-downloads.adblockplus.org/easylistdutch.txt
+    description: Dutch ad servers
+    category: regional
+
+  - id: easylist-italy
+    name: EasyList Italy
+    url: https://easylist-downloads.adblockplus.org/easylistitaly.txt
+    description: Italian ad servers
+    category: regional
+
+  - id: easylist-spanish
+    name: EasyList Spanish
+    url: https://easylist-downloads.adblockplus.org/easylistspanish.txt
+    description: Spanish ad servers
+    category: regional
+
+  # ============================================================================
+  # CRYPTO & MINING
+  # ============================================================================
+
+  - id: crypto-mining
+    name: Crypto Mining
+    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/coinblocklist
+    description: Cryptocurrency mining pools
+    category: crypto
+
+  - id: crypto-scams
+    name: Crypto Scams
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/crypto-scams
+    description: Cryptocurrency scam sites
+    category: crypto
+
+  # ============================================================================
+  # PARENTAL CONTROL PRESETS
+  # ============================================================================
+
+  - id: stevenblack-fakenews-gambling-porn
+    name: Family Filter (No Social)
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn/hosts
+    description: Blocks ads, porn, gambling, fakenews (keeps social)
+    category: family
+
+  - id: stevenblack-fakenews-gambling-porn-social
+    name: Family Filter Complete
+    url: https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn-social/hosts
+    description: Complete family filter (blocks everything)
+    category: family
+
+  # ============================================================================
+  # ANNOYANCES (Cookie banners, newsletter popups, etc.)
+  # ============================================================================
+
+  - id: fanboy-annoyances
+    name: Fanboy Annoyances
+    url: https://easylist.to/easylist/fanboy-annoyance.txt
+    description: Cookie banners, newsletter popups
+    category: annoyances
+
+  - id: fanboy-social
+    name: Fanboy Social
+    url: https://easylist.to/easylist/fanboy-social.txt
+    description: Social media widgets and buttons
+    category: annoyances
+
+  - id: adguard-annoyances
+    name: AdGuard Annoyances
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_14.txt
+    description: AdGuard annoyances filter
+    category: annoyances
+
+  # ============================================================================
+  # YOUTUBE ADS (Experimental - may break functionality)
+  # ============================================================================
+
+  - id: youtube-ads
+    name: YouTube Ads
+    url: https://raw.githubusercontent.com/kboghdady/youTube_ads_4_pi-hole/master/youtubelist.txt
+    description: YouTube ad servers (may not work for all ads)
+    category: youtube
