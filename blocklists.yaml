@@ -654,3 +654,83 @@ blocklists:
     url: https://raw.githubusercontent.com/kboghdady/youTube_ads_4_pi-hole/master/youtubelist.txt
     description: YouTube ad servers (may not work for all ads)
     category: youtube
+
+  # ============================================================================
+  # 1HOSTS - Curated Lists
+  # ============================================================================
+
+  - id: 1hosts-lite
+    name: 1Hosts Lite
+    url: https://o0.pages.dev/Lite/hosts.txt
+    description: Lightweight curated blocklist
+    category: ads
+
+  - id: 1hosts-pro
+    name: 1Hosts Pro
+    url: https://o0.pages.dev/Pro/hosts.txt
+    description: Extended curated blocklist
+    category: ads
+
+  # ============================================================================
+  # DYNDNS & ABUSE
+  # ============================================================================
+
+  - id: hagezi-dyndns
+    name: Hagezi DynDNS
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/dyndns.txt
+    description: Block dynamic DNS services (often abused)
+    category: security
+
+  - id: hagezi-hoster
+    name: Hagezi Hoster
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/hoster.txt
+    description: Block known abuse-friendly hosting
+    category: security
+
+  # ============================================================================
+  # MOBILE & APP TELEMETRY
+  # ============================================================================
+
+  - id: mobile-ads
+    name: Mobile Ads Filter
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/mobile-ads
+    description: Mobile app advertising
+    category: mobile
+
+  - id: adguard-mobile
+    name: AdGuard Mobile Filter
+    url: https://adguardteam.github.io/HostlistsRegistry/assets/filter_11.txt
+    description: Mobile-specific ad filter
+    category: mobile
+
+  # ============================================================================
+  # SCAM & FRAUD
+  # ============================================================================
+
+  - id: scam-blocklist
+    name: Scam Blocklist
+    url: https://raw.githubusercontent.com/durablenapkin/scamblocklist/master/hosts.txt
+    description: Known scam and fraud domains
+    category: security
+
+  - id: anti-fraud
+    name: Anti-Fraud
+    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/anti-fraud
+    description: Fraud prevention list
+    category: security
+
+  # ============================================================================
+  # ULTIMATIVE - Combined Lists
+  # ============================================================================
+
+  - id: hagezi-ultimate
+    name: Hagezi Ultimate
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/ultimate.txt
+    description: All Hagezi lists combined (very aggressive)
+    category: ultimate
+
+  - id: oisd-full
+    name: OISD Full
+    url: https://full.oisd.nl/domainswild
+    description: Most comprehensive OISD list
+    category: ultimate
