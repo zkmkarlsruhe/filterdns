@@ -536,13 +536,13 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
     allowed = total - blocked
     avg_response_time = counts["avg_response_time"]
 
-    # Top blocked domains
+    # Top blocked domains with blocklist info
     top_blocked = await db.fetch(
         """
-        SELECT domain, COUNT(*) as count
+        SELECT domain, blocklist_id, COUNT(*) as count
         FROM query_logs
         WHERE profile_id = $1 AND timestamp > $2 AND blocked = TRUE
-        GROUP BY domain
+        GROUP BY domain, blocklist_id
         ORDER BY count DESC
         LIMIT 10
         """,
@@ -609,7 +609,7 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
         blocked_queries=blocked,
         allowed_queries=allowed,
         blocked_percentage=(blocked / total * 100) if total > 0 else 0,
-        top_blocked_domains=[(row["domain"], row["count"]) for row in top_blocked],
+        top_blocked_domains=[(row["domain"], row["count"], row["blocklist_id"]) for row in top_blocked],
         top_allowed_domains=[(row["domain"], row["count"]) for row in top_allowed],
         queries_by_hour=[(row["hour"], row["count"]) for row in by_hour],
         query_types=[(row["query_type"], row["count"]) for row in query_types],

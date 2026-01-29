@@ -177,10 +177,9 @@ class ProfileStats(BaseModel):
     blocked_queries: int = 0
     allowed_queries: int = 0
     blocked_percentage: float = 0.0
-    top_blocked_domains: list[tuple[str, int]] = Field(default_factory=list)
+    top_blocked_domains: list[tuple[str, int, str | None]] = Field(default_factory=list)  # (domain, count, blocklist_id)
     top_allowed_domains: list[tuple[str, int]] = Field(default_factory=list)
     queries_by_hour: list[tuple[int, int]] = Field(default_factory=list)
-    query_types: list[tuple[str, int]] = Field(default_factory=list)  # (type, count)
     avg_response_time_ms: float | None = None
     top_blocklists: list[tuple[str, int]] = Field(default_factory=list)  # (blocklist_id, count)
 

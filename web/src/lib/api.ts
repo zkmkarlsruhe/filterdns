@@ -304,11 +304,21 @@ export interface ProfileStats {
 	allowed_queries: number;
 	blocked_percentage: number;
 	avg_response_time_ms: number | null;
-	top_blocked_domains: { domain: string; count: number }[];
+	top_blocked_domains: {
+		domain: string;
+		count: number;
+		blocklist_id: string | null;
+		blocklist_name: string | null;
+		blocklist_category: string | null;
+	}[];
 	top_allowed_domains: { domain: string; count: number }[];
 	queries_by_hour: { hour: number; count: number }[];
-	query_types: { type: string; count: number }[];
-	top_blocklists: { blocklist_id: string; count: number }[];
+	top_blocklists: {
+		blocklist_id: string;
+		name: string;
+		category: string | null;
+		count: number;
+	}[];
 }
 
 export interface AdminProfile {

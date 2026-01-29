@@ -28,6 +28,8 @@
 	let loading = true;
 	let error = '';
 	let showDetailedStats = false;
+	let statsHours = 24; // Time period for stats
+	let loadingStats = false;
 
 	// Helper functions for bar chart calculations
 	function getBarWidth(count: number, items: { count: number }[]): number {
@@ -51,6 +53,21 @@
 	function getBlocklistName(blocklistId: string): string {
 		const bl = blocklists.find(b => b.id === blocklistId);
 		return bl?.name || blocklistId;
+	}
+
+	async function loadStats(hours: number) {
+		statsHours = hours;
+		loadingStats = true;
+		const statsResult = await getProfileStats(profileName, hours, authToken);
+		detailedStats = statsResult.data || null;
+		loadingStats = false;
+	}
+
+	function formatBlocklistSource(item: { blocklist_id: string | null; blocklist_name: string | null; blocklist_category: string | null }): string {
+		if (!item.blocklist_id) return 'Unknown';
+		if (item.blocklist_id === 'deny_rule') return 'Custom Rule';
+		if (item.blocklist_id === 'preset') return 'Preset';
+		return item.blocklist_name || item.blocklist_id;
 	}
 
 	// Auth state
@@ -496,25 +513,38 @@
 		<section class="card">
 			<div class="card-header">
 				<h2>Statistics</h2>
-				<button class="btn btn-small btn-outline" on:click={() => showDetailedStats = !showDetailedStats}>
-					{showDetailedStats ? 'Hide Details' : 'Show Details'}
-				</button>
+				<div class="stats-controls">
+					<div class="time-selector">
+						<button class="time-btn" class:active={statsHours === 1} on:click={() => loadStats(1)}>1h</button>
+						<button class="time-btn" class:active={statsHours === 4} on:click={() => loadStats(4)}>4h</button>
+						<button class="time-btn" class:active={statsHours === 24} on:click={() => loadStats(24)}>24h</button>
+						<button class="time-btn" class:active={statsHours === 168} on:click={() => loadStats(168)}>7d</button>
+					</div>
+					<button class="btn btn-small btn-outline" on:click={() => showDetailedStats = !showDetailedStats}>
+						{showDetailedStats ? 'Hide' : 'Show'}
+					</button>
+				</div>
 			</div>
 
-			{#if showDetailedStats && detailedStats}
+			{#if loadingStats}
+				<div class="stats-loading">Loading stats...</div>
+			{:else if showDetailedStats && detailedStats}
 				<div class="stats-details">
-					<!-- Query Types -->
-					{#if detailedStats.query_types.length > 0}
-						<div class="stats-subsection">
-							<h4>Query Types</h4>
-							<div class="stats-bar-chart">
-								{#each detailedStats.query_types as qt}
-									<div class="bar-row">
-										<span class="bar-label">{qt.type}</span>
-										<div class="bar-container">
-											<div class="bar" style="width: {getBarWidth(qt.count, detailedStats.query_types)}%"></div>
-										</div>
-										<span class="bar-value">{qt.count.toLocaleString()}</span>
+					<!-- Top Blocked Domains with Source -->
+					{#if detailedStats.top_blocked_domains.length > 0}
+						<div class="stats-subsection wide">
+							<h4>Top Blocked Domains</h4>
+							<div class="blocked-domains-table">
+								{#each detailedStats.top_blocked_domains.slice(0, 8) as item}
+									<div class="blocked-row">
+										<span class="blocked-domain">{item.domain}</span>
+										<span class="blocked-source" class:custom-rule={item.blocklist_id === 'deny_rule'}>
+											{formatBlocklistSource(item)}
+											{#if item.blocklist_category}
+												<span class="source-category">{item.blocklist_category}</span>
+											{/if}
+										</span>
+										<span class="blocked-count">{item.count}</span>
 									</div>
 								{/each}
 							</div>
@@ -526,24 +556,9 @@
 						<div class="stats-subsection">
 							<h4>Top Allowed Domains</h4>
 							<div class="domain-list">
-								{#each detailedStats.top_allowed_domains.slice(0, 5) as item}
+								{#each detailedStats.top_allowed_domains.slice(0, 6) as item}
 									<div class="domain-row">
-										<span class="domain-name">{item.domain}</span>
-										<span class="domain-count">{item.count.toLocaleString()}</span>
-									</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
-
-					<!-- Top Blocked Domains -->
-					{#if detailedStats.top_blocked_domains.length > 0}
-						<div class="stats-subsection">
-							<h4>Top Blocked Domains</h4>
-							<div class="domain-list blocked">
-								{#each detailedStats.top_blocked_domains.slice(0, 5) as item}
-									<div class="domain-row">
-										<span class="domain-name">{item.domain}</span>
+										<span class="domain-name allowed">{item.domain}</span>
 										<span class="domain-count">{item.count.toLocaleString()}</span>
 									</div>
 								{/each}
@@ -554,13 +569,18 @@
 					<!-- Top Blocklists -->
 					{#if detailedStats.top_blocklists.length > 0}
 						<div class="stats-subsection">
-							<h4>Most Active Blocklists</h4>
+							<h4>Blocking Sources</h4>
 							<div class="blocklist-stats">
 								{#each detailedStats.top_blocklists.slice(0, 5) as bl}
 									<div class="bar-row">
-										<span class="bar-label" title={bl.blocklist_id}>
-											{getBlocklistName(bl.blocklist_id)}
-										</span>
+										<div class="bar-label-wrap">
+											<span class="bar-label" title={bl.blocklist_id}>
+												{bl.blocklist_id === 'deny_rule' ? 'Custom Rules' : bl.name}
+											</span>
+											{#if bl.category}
+												<span class="bar-category">{bl.category}</span>
+											{/if}
+										</div>
 										<div class="bar-container">
 											<div class="bar blocked" style="width: {getBarWidth(bl.count, detailedStats.top_blocklists)}%"></div>
 										</div>
@@ -1656,6 +1676,122 @@
 		border-radius: 0.5rem;
 	}
 
+	.stats-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.time-selector {
+		display: flex;
+		gap: 0.25rem;
+		background: var(--bg);
+		padding: 0.25rem;
+		border-radius: 0.5rem;
+	}
+
+	.time-btn {
+		padding: 0.35rem 0.75rem;
+		border: none;
+		background: transparent;
+		color: var(--text-secondary);
+		cursor: pointer;
+		border-radius: 0.25rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		transition: all 0.2s;
+	}
+
+	.time-btn:hover {
+		background: var(--bg-secondary);
+		color: var(--text);
+	}
+
+	.time-btn.active {
+		background: var(--primary);
+		color: white;
+	}
+
+	.stats-loading {
+		text-align: center;
+		padding: 2rem;
+		color: var(--text-secondary);
+	}
+
+	.stats-subsection.wide {
+		grid-column: span 2;
+	}
+
+	.blocked-domains-table {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.blocked-row {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		gap: 1rem;
+		align-items: center;
+		padding: 0.5rem 0.75rem;
+		background: rgba(239, 68, 68, 0.1);
+		border-radius: 0.25rem;
+		border-left: 3px solid var(--danger);
+	}
+
+	.blocked-domain {
+		font-family: monospace;
+		font-size: 0.85rem;
+		color: var(--danger);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.blocked-source {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.blocked-source.custom-rule {
+		color: var(--warning);
+	}
+
+	.source-category {
+		background: var(--bg-secondary);
+		padding: 0.15rem 0.4rem;
+		border-radius: 0.25rem;
+		font-size: 0.7rem;
+		text-transform: uppercase;
+	}
+
+	.blocked-count {
+		font-weight: 600;
+		font-size: 0.85rem;
+		min-width: 2rem;
+		text-align: right;
+	}
+
+	.domain-name.allowed {
+		color: var(--success);
+	}
+
+	.bar-label-wrap {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 100px;
+	}
+
+	.bar-category {
+		font-size: 0.65rem;
+		color: var(--text-secondary);
+		text-transform: uppercase;
+	}
+
 	@media (max-width: 768px) {
 		.stats-section {
 			grid-template-columns: repeat(2, 1fr);
@@ -1667,6 +1803,28 @@
 
 		.stats-details {
 			grid-template-columns: 1fr;
+		}
+
+		.stats-subsection.wide {
+			grid-column: span 1;
+		}
+
+		.stats-controls {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.5rem;
+		}
+
+		.time-selector {
+			justify-content: center;
+		}
+
+		.blocked-row {
+			grid-template-columns: 1fr auto;
+		}
+
+		.blocked-source {
+			display: none;
 		}
 	}
 </style>

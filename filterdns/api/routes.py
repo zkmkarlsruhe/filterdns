@@ -374,7 +374,8 @@ def create_api_blueprint() -> Blueprint:
                     "blocked_queries": stats.blocked_queries,
                     "blocked_percentage": round(stats.blocked_percentage, 1),
                     "top_blocked_domains": [
-                        {"domain": d, "count": c} for d, c in stats.top_blocked_domains[:5]
+                        {"domain": d, "count": c, "blocklist_id": bl_id}
+                        for d, c, bl_id in stats.top_blocked_domains[:5]
                     ],
                 },
                 "created_at": profile.created_at.isoformat(),
@@ -592,6 +593,10 @@ def create_api_blueprint() -> Blueprint:
         hours = parse_int_param(request.args.get("hours"), default=24, min_val=1, max_val=168)  # Max 7 days
         stats = await queries.get_profile_stats(profile.id, hours)
 
+        # Get blocklist info for displaying names/categories
+        all_blocklists = await queries.list_blocklists()
+        blocklist_map = {bl.id: {"name": bl.name, "category": bl.category} for bl in all_blocklists}
+
         return jsonify(
             {
                 "hours": hours,
@@ -601,17 +606,27 @@ def create_api_blueprint() -> Blueprint:
                 "blocked_percentage": round(stats.blocked_percentage, 1),
                 "avg_response_time_ms": stats.avg_response_time_ms,
                 "top_blocked_domains": [
-                    {"domain": d, "count": c} for d, c in stats.top_blocked_domains
+                    {
+                        "domain": d,
+                        "count": c,
+                        "blocklist_id": bl_id,
+                        "blocklist_name": blocklist_map.get(bl_id, {}).get("name") if bl_id else None,
+                        "blocklist_category": blocklist_map.get(bl_id, {}).get("category") if bl_id else None,
+                    }
+                    for d, c, bl_id in stats.top_blocked_domains
                 ],
                 "top_allowed_domains": [
                     {"domain": d, "count": c} for d, c in stats.top_allowed_domains
                 ],
                 "queries_by_hour": [{"hour": h, "count": c} for h, c in stats.queries_by_hour],
-                "query_types": [
-                    {"type": t, "count": c} for t, c in stats.query_types
-                ],
                 "top_blocklists": [
-                    {"blocklist_id": b, "count": c} for b, c in stats.top_blocklists
+                    {
+                        "blocklist_id": b,
+                        "name": blocklist_map.get(b, {}).get("name", b),
+                        "category": blocklist_map.get(b, {}).get("category"),
+                        "count": c,
+                    }
+                    for b, c in stats.top_blocklists
                 ],
             }
         ), 200
