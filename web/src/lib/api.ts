@@ -210,10 +210,29 @@ export interface AdminSettings {
 export interface Blocklist {
 	id: string;
 	name: string;
+	url: string;
 	description: string | null;
 	category: string | null;
 	domain_count: number;
+	last_updated: string | null;
 	enabled: boolean;
+}
+
+// Admin Blocklist Management
+export async function adminAddBlocklist(blocklist: { id: string; name: string; url: string; description?: string; category?: string }) {
+	return request<{ id: string; name: string; url: string }>('POST', '/admin/blocklists', blocklist);
+}
+
+export async function adminDeleteBlocklist(blocklistId: string) {
+	return request<{ message: string }>('DELETE', `/admin/blocklists/${blocklistId}`);
+}
+
+export async function adminEnableBlocklist(blocklistId: string) {
+	return request<{ message: string }>('POST', `/admin/blocklists/${blocklistId}/enable`);
+}
+
+export async function adminDisableBlocklist(blocklistId: string) {
+	return request<{ message: string }>('POST', `/admin/blocklists/${blocklistId}/disable`);
 }
 
 export interface Profile {

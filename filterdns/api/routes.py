@@ -47,9 +47,11 @@ def create_api_blueprint() -> Blueprint:
                     {
                         "id": bl.id,
                         "name": bl.name,
+                        "url": bl.url,
                         "description": bl.description,
                         "category": bl.category,
                         "domain_count": bl.domain_count,
+                        "last_updated": bl.last_updated.isoformat() if bl.last_updated else None,
                         "enabled": bl.enabled,
                     }
                     for bl in blocklists

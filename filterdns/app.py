@@ -206,3 +206,7 @@ async def _blocklist_update_loop(engine) -> None:
         except Exception as e:
             logger.error("Blocklist update error", error=str(e))
             await asyncio.sleep(300)  # Wait 5 minutes on error
+
+
+# Create the app instance for ASGI servers
+app = create_app()

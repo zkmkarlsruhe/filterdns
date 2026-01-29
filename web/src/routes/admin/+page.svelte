@@ -8,6 +8,10 @@
 		adminGetSettings,
 		adminUpdateSettings,
 		getBlocklists,
+		adminAddBlocklist,
+		adminDeleteBlocklist,
+		adminEnableBlocklist,
+		adminDisableBlocklist,
 		type AdminProfile,
 		type GlobalStats,
 		type Blocklist
@@ -25,6 +29,14 @@
 	let defaultBlocklists: string[] = [];
 	let savingSettings = false;
 	let expandedSettingsCategories: Set<string> = new Set();
+
+	// Blocklist management state
+	let showAddBlocklistForm = false;
+	let newBlocklist = { id: '', name: '', url: '', description: '', category: '' };
+	let addingBlocklist = false;
+	let deletingBlocklistId: string | null = null;
+	let togglingBlocklistId: string | null = null;
+	let confirmDeleteBlocklist: string | null = null;
 
 	// Group blocklists by category
 	$: blocklistsByCategory = allBlocklists
@@ -141,6 +153,71 @@
 		} else {
 			toasts.success('Settings saved');
 		}
+	}
+
+	// Blocklist management functions
+	async function handleAddBlocklist() {
+		if (!newBlocklist.id || !newBlocklist.name || !newBlocklist.url) {
+			toasts.error('ID, name, and URL are required');
+			return;
+		}
+
+		addingBlocklist = true;
+		const result = await adminAddBlocklist({
+			id: newBlocklist.id.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+			name: newBlocklist.name,
+			url: newBlocklist.url,
+			description: newBlocklist.description || undefined,
+			category: newBlocklist.category || undefined
+		});
+		addingBlocklist = false;
+
+		if (result.error) {
+			toasts.error(result.error);
+		} else {
+			toasts.success(`Blocklist "${newBlocklist.name}" added`);
+			newBlocklist = { id: '', name: '', url: '', description: '', category: '' };
+			showAddBlocklistForm = false;
+			await loadData();
+		}
+	}
+
+	async function handleDeleteBlocklist(blocklistId: string) {
+		deletingBlocklistId = blocklistId;
+		const result = await adminDeleteBlocklist(blocklistId);
+		deletingBlocklistId = null;
+		confirmDeleteBlocklist = null;
+
+		if (result.error) {
+			toasts.error(result.error);
+		} else {
+			toasts.success('Blocklist deleted');
+			// Remove from local state
+			allBlocklists = allBlocklists.filter(bl => bl.id !== blocklistId);
+			defaultBlocklists = defaultBlocklists.filter(id => id !== blocklistId);
+		}
+	}
+
+	async function handleToggleBlocklist(blocklist: Blocklist) {
+		togglingBlocklistId = blocklist.id;
+		const result = blocklist.enabled
+			? await adminDisableBlocklist(blocklist.id)
+			: await adminEnableBlocklist(blocklist.id);
+		togglingBlocklistId = null;
+
+		if (result.error) {
+			toasts.error(result.error);
+		} else {
+			// Update local state
+			allBlocklists = allBlocklists.map(bl =>
+				bl.id === blocklist.id ? { ...bl, enabled: !blocklist.enabled } : bl
+			);
+			toasts.success(blocklist.enabled ? 'Blocklist disabled' : 'Blocklist enabled');
+		}
+	}
+
+	function generateIdFromName(name: string): string {
+		return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 	}
 </script>
 
@@ -313,9 +390,174 @@
 				{/if}
 			</section>
 
+			<!-- Blocklist Management Section -->
+			<section class="card blocklist-management">
+				<div class="section-header">
+					<h2>Blocklist Management</h2>
+					<button
+						class="btn btn-primary btn-sm"
+						on:click={() => showAddBlocklistForm = !showAddBlocklistForm}
+					>
+						{showAddBlocklistForm ? 'Cancel' : '+ Add Blocklist'}
+					</button>
+				</div>
+
+				{#if showAddBlocklistForm}
+					<div class="add-blocklist-form">
+						<h3>Add New Blocklist</h3>
+						<div class="form-row">
+							<div class="form-group">
+								<label for="bl-name">Name</label>
+								<input
+									id="bl-name"
+									type="text"
+									bind:value={newBlocklist.name}
+									on:input={() => {
+										if (!newBlocklist.id || newBlocklist.id === generateIdFromName(newBlocklist.name.slice(0, -1))) {
+											newBlocklist.id = generateIdFromName(newBlocklist.name);
+										}
+									}}
+									placeholder="My Custom Blocklist"
+								/>
+							</div>
+							<div class="form-group">
+								<label for="bl-id">ID</label>
+								<input
+									id="bl-id"
+									type="text"
+									bind:value={newBlocklist.id}
+									placeholder="my-custom-blocklist"
+								/>
+							</div>
+						</div>
+						<div class="form-group">
+							<label for="bl-url">URL</label>
+							<input
+								id="bl-url"
+								type="url"
+								bind:value={newBlocklist.url}
+								placeholder="https://example.com/blocklist.txt"
+							/>
+						</div>
+						<div class="form-row">
+							<div class="form-group">
+								<label for="bl-category">Category</label>
+								<select id="bl-category" bind:value={newBlocklist.category}>
+									<option value="">Select category...</option>
+									<option value="ads">Ads</option>
+									<option value="tracking">Tracking</option>
+									<option value="malware">Malware</option>
+									<option value="adult">Adult</option>
+									<option value="gambling">Gambling</option>
+									<option value="social">Social</option>
+									<option value="multi">Multi-purpose</option>
+									<option value="other">Other</option>
+								</select>
+							</div>
+							<div class="form-group">
+								<label for="bl-desc">Description (optional)</label>
+								<input
+									id="bl-desc"
+									type="text"
+									bind:value={newBlocklist.description}
+									placeholder="Brief description"
+								/>
+							</div>
+						</div>
+						<button
+							class="btn btn-primary"
+							on:click={handleAddBlocklist}
+							disabled={addingBlocklist || !newBlocklist.id || !newBlocklist.name || !newBlocklist.url}
+						>
+							{addingBlocklist ? 'Adding...' : 'Add Blocklist'}
+						</button>
+					</div>
+				{/if}
+
+				<div class="blocklist-table-wrapper">
+					<table class="blocklist-table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>URL</th>
+								<th>Category</th>
+								<th>Domains</th>
+								<th>Status</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each allBlocklists as bl}
+								<tr class:disabled={!bl.enabled}>
+									<td>
+										<div class="blocklist-name-cell">
+											<strong>{bl.name}</strong>
+											<code class="blocklist-id">{bl.id}</code>
+										</div>
+									</td>
+									<td class="url-cell">
+										<a href={bl.url} target="_blank" rel="noopener noreferrer" title={bl.url}>
+											{bl.url.length > 50 ? bl.url.substring(0, 50) + '...' : bl.url}
+										</a>
+									</td>
+									<td>
+										<span class="category-badge">{bl.category || 'other'}</span>
+									</td>
+									<td>{bl.domain_count.toLocaleString()}</td>
+									<td>
+										<button
+											class="status-toggle"
+											class:enabled={bl.enabled}
+											class:disabled={!bl.enabled}
+											on:click={() => handleToggleBlocklist(bl)}
+											disabled={togglingBlocklistId === bl.id}
+										>
+											{togglingBlocklistId === bl.id ? '...' : (bl.enabled ? 'Enabled' : 'Disabled')}
+										</button>
+									</td>
+									<td>
+										{#if confirmDeleteBlocklist === bl.id}
+											<div class="confirm-delete">
+												<span>Delete?</span>
+												<button
+													class="btn-icon btn-danger"
+													on:click={() => handleDeleteBlocklist(bl.id)}
+													disabled={deletingBlocklistId === bl.id}
+												>
+													{deletingBlocklistId === bl.id ? '...' : 'Yes'}
+												</button>
+												<button
+													class="btn-icon"
+													on:click={() => confirmDeleteBlocklist = null}
+												>
+													No
+												</button>
+											</div>
+										{:else}
+											<button
+												class="btn-icon btn-danger"
+												on:click={() => confirmDeleteBlocklist = bl.id}
+												title="Delete blocklist"
+											>
+												Delete
+											</button>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				{#if allBlocklists.length === 0}
+					<p class="empty">No blocklists configured</p>
+				{/if}
+			</section>
+
 			{#if stats?.loaded_blocklists}
 				<section class="card">
-					<h2>Loaded Blocklists</h2>
+					<h2>Currently Loaded Blocklists</h2>
+					<p class="section-description">These blocklists are currently loaded in the DNS filtering engine.</p>
 					<div class="blocklist-tags">
 						{#each stats.loaded_blocklists as bl}
 							<span class="tag">{bl}</span>
@@ -626,6 +868,202 @@
 		color: var(--text);
 	}
 
+	/* Blocklist Management */
+	.blocklist-management {
+		margin-top: 1.5rem;
+	}
+
+	.section-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.section-header h2 {
+		margin: 0;
+	}
+
+	.section-description {
+		color: var(--text-secondary);
+		font-size: 0.875rem;
+		margin: 0 0 1rem 0;
+	}
+
+	.btn-sm {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+	}
+
+	.add-blocklist-form {
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		padding: 1.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.add-blocklist-form h3 {
+		margin: 0 0 1rem 0;
+		font-size: 1rem;
+	}
+
+	.form-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+	}
+
+	.form-group {
+		margin-bottom: 1rem;
+	}
+
+	.form-group label {
+		display: block;
+		margin-bottom: 0.25rem;
+		font-size: 0.875rem;
+		color: var(--text-secondary);
+	}
+
+	.form-group input,
+	.form-group select {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: 0.375rem;
+		color: var(--text);
+		font-size: 0.875rem;
+	}
+
+	.form-group select {
+		cursor: pointer;
+	}
+
+	.blocklist-table-wrapper {
+		overflow-x: auto;
+	}
+
+	.blocklist-table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.875rem;
+	}
+
+	.blocklist-table th {
+		text-align: left;
+		padding: 0.75rem 0.5rem;
+		border-bottom: 2px solid var(--border);
+		color: var(--text-secondary);
+		font-weight: 500;
+	}
+
+	.blocklist-table td {
+		padding: 0.75rem 0.5rem;
+		border-bottom: 1px solid var(--border);
+		vertical-align: middle;
+	}
+
+	.blocklist-table tr.disabled {
+		opacity: 0.6;
+	}
+
+	.blocklist-name-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.blocklist-id {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		background: var(--bg);
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+	}
+
+	.url-cell {
+		max-width: 250px;
+		word-break: break-all;
+	}
+
+	.url-cell a {
+		color: var(--primary);
+		text-decoration: none;
+		font-size: 0.75rem;
+	}
+
+	.url-cell a:hover {
+		text-decoration: underline;
+	}
+
+	.category-badge {
+		display: inline-block;
+		padding: 0.125rem 0.5rem;
+		background: var(--bg);
+		border-radius: 1rem;
+		font-size: 0.75rem;
+		text-transform: capitalize;
+	}
+
+	.status-toggle {
+		padding: 0.25rem 0.75rem;
+		border: none;
+		border-radius: 1rem;
+		font-size: 0.75rem;
+		cursor: pointer;
+		transition: all 0.2s;
+	}
+
+	.status-toggle.enabled {
+		background: var(--success);
+		color: white;
+	}
+
+	.status-toggle.disabled {
+		background: var(--border);
+		color: var(--text-secondary);
+	}
+
+	.status-toggle:hover:not(:disabled) {
+		opacity: 0.8;
+	}
+
+	.status-toggle:disabled {
+		cursor: not-allowed;
+	}
+
+	.btn-icon {
+		padding: 0.25rem 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: 0.25rem;
+		background: transparent;
+		color: var(--text);
+		cursor: pointer;
+		font-size: 0.75rem;
+	}
+
+	.btn-icon:hover {
+		background: var(--bg);
+	}
+
+	.btn-icon.btn-danger {
+		color: var(--error);
+		border-color: var(--error);
+	}
+
+	.btn-icon.btn-danger:hover {
+		background: var(--error);
+		color: white;
+	}
+
+	.confirm-delete {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+	}
+
 	@media (max-width: 768px) {
 		.stats-grid {
 			grid-template-columns: repeat(2, 1fr);
@@ -637,6 +1075,24 @@
 
 		.settings-header .btn {
 			width: 100%;
+		}
+
+		.form-row {
+			grid-template-columns: 1fr;
+		}
+
+		.section-header {
+			flex-direction: column;
+			gap: 1rem;
+			align-items: stretch;
+		}
+
+		.blocklist-table {
+			font-size: 0.75rem;
+		}
+
+		.url-cell {
+			max-width: 150px;
 		}
 	}
 </style>
