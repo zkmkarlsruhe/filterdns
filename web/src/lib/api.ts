@@ -51,8 +51,20 @@ export async function createProfile(name: string, password?: string) {
 	return request<Profile>('POST', '/profiles', { name, password });
 }
 
-export async function getProfile(name: string, password?: string) {
-	return request<ProfileDetails>('GET', `/profiles/${name}`, undefined, password);
+export async function profileLogin(name: string, password: string) {
+	return request<{ token: string; expires_in: number; profile_id: string }>(
+		'POST',
+		`/profiles/${name}/login`,
+		{ password }
+	);
+}
+
+export async function profileLogout(name: string, token?: string) {
+	return request<{ message: string }>('POST', `/profiles/${name}/logout`, undefined, token);
+}
+
+export async function getProfile(name: string, token?: string) {
+	return request<ProfileDetails>('GET', `/profiles/${name}`, undefined, token);
 }
 
 export async function updateProfile(name: string, data: { password?: string; blocklists?: string[] }, authPassword?: string) {

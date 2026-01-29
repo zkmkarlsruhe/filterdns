@@ -7,7 +7,7 @@ from pathlib import Path
 from time import time
 
 import structlog
-from quart import Quart, request, send_from_directory
+from quart import Quart, make_response, request, send_from_directory
 from quart_cors import cors
 
 from filterdns.api import create_api_blueprint
@@ -30,29 +30,82 @@ def create_app() -> Quart:
         static_url_path="/static",
     )
 
-    # Enable CORS for API routes
-    app = cors(app, allow_origin="*")
+    # Enable CORS for API routes - restrict to same origin in production
+    allowed_origins = os.environ.get("CORS_ORIGINS", "").split(",")
+    if allowed_origins == [""]:
+        # Default: same-origin only (no CORS headers needed for same-origin requests)
+        # Only enable CORS for specific trusted origins if configured
+        allowed_origins = []
+    # Only enable CORS if specific origins are configured
+    # Avoid wildcard + credentials which is invalid
+    if allowed_origins:
+        app = cors(
+            app,
+            allow_origin=allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
+        )
+    # else: no CORS headers added (same-origin only)
 
-    # Secret key for sessions
-    app.secret_key = os.environ.get("SECRET_KEY", os.urandom(32))
+    # Secret key for sessions - MUST be set in production
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        logger.warning("SECRET_KEY not set, using random key (sessions will not persist across restarts)")
+        secret_key = os.urandom(32)
+    app.secret_key = secret_key
 
-    # Configure session
+    # Configure secure session
     app.config["SESSION_TYPE"] = "secure_cookie"
-    app.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 24 hours
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SECURE"] = not settings.debug
+    app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
+    app.config["PERMANENT_SESSION_LIFETIME"] = 3600  # 1 hour (reduced from 24h)
 
     # Rate limiting state
     rate_limit_store: dict[str, list[float]] = defaultdict(list)
+    admin_rate_limit_store: dict[str, list[float]] = defaultdict(list)
     RATE_LIMIT_WINDOW = 60  # seconds
-    RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window for sensitive endpoints
+    RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window for general sensitive endpoints
+    ADMIN_RATE_LIMIT_WINDOW = 300  # 5 minutes for admin login
+    ADMIN_RATE_LIMIT_MAX_ATTEMPTS = 5  # max login attempts per window
+
+    def get_client_ip_for_rate_limit() -> str:
+        """Get client IP for rate limiting, handling proxies."""
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.remote_addr or "unknown"
 
     @app.before_request
     async def check_rate_limit():
-        """Basic rate limiting for sensitive endpoints."""
-        # Only rate limit profile creation
-        if request.path == "/api/profiles" and request.method == "POST":
-            client_ip = request.remote_addr or "unknown"
-            now = time()
+        """Rate limiting for sensitive endpoints."""
+        client_ip = get_client_ip_for_rate_limit()
+        now = time()
 
+        # Strict rate limiting for admin login (prevent brute-force)
+        if request.path == "/api/admin/login" and request.method == "POST":
+            # Clean old entries
+            admin_rate_limit_store[client_ip] = [
+                t for t in admin_rate_limit_store[client_ip]
+                if now - t < ADMIN_RATE_LIMIT_WINDOW
+            ]
+
+            # Check limit
+            if len(admin_rate_limit_store[client_ip]) >= ADMIN_RATE_LIMIT_MAX_ATTEMPTS:
+                logger.warning("Admin login rate limit exceeded", ip=client_ip)
+                response = await make_response(
+                    {"error": "Too many login attempts. Please try again later."},
+                    429
+                )
+                return response
+
+            # Record attempt
+            admin_rate_limit_store[client_ip].append(now)
+
+        # Rate limit profile creation and other sensitive endpoints
+        elif (request.path == "/api/profiles" and request.method == "POST") or \
+             (request.path.endswith("/pause") and request.method == "POST"):
             # Clean old entries
             rate_limit_store[client_ip] = [
                 t for t in rate_limit_store[client_ip]
@@ -61,7 +114,11 @@ def create_app() -> Quart:
 
             # Check limit
             if len(rate_limit_store[client_ip]) >= RATE_LIMIT_MAX_REQUESTS:
-                return {"error": "Rate limit exceeded. Please try again later."}, 429
+                response = await make_response(
+                    {"error": "Rate limit exceeded. Please try again later."},
+                    429
+                )
+                return response
 
             # Record request
             rate_limit_store[client_ip].append(now)
@@ -109,12 +166,28 @@ def create_app() -> Quart:
     app.register_blueprint(create_api_blueprint())
     app.register_blueprint(create_doh_blueprint())
 
+    # Sensitive file patterns that should never be served or trigger SPA fallback
+    BLOCKED_PATHS = {
+        ".env", ".env.local", ".env.production", ".env.development",
+        "config.json", "config.yaml", "config.yml",
+        ".git", ".gitignore", ".htaccess", ".htpasswd",
+        "docker-compose.yml", "docker-compose.yaml",
+        "Dockerfile", "secrets.json", "credentials.json",
+        ".aws", ".ssh", "id_rsa", "id_ed25519",
+    }
+
     # Serve static files for the SPA
     @app.route("/")
     @app.route("/<path:path>")
     async def serve_spa(path: str = "index.html"):
         """Serve the SPA frontend."""
         static_dir = Path(app.static_folder or "static")
+
+        # Block access to sensitive files - return 404 immediately
+        path_lower = path.lower()
+        path_name = Path(path).name.lower()
+        if path_name in BLOCKED_PATHS or path_lower.startswith("."):
+            return "Not found", 404
 
         # Try to serve the requested file
         file_path = static_dir / path

@@ -214,11 +214,49 @@ async def update_device_hostname(ip_address: str, hostname: str) -> None:
     )
 
 
-async def get_device_by_ip(ip_address: str) -> Device | None:
-    """Get a device by IP address."""
+async def get_device_by_ip(profile_id: UUID, ip_address: str) -> Device | None:
+    """Get a device by IP address for a specific profile."""
     db = get_db()
-    row = await db.fetchrow("SELECT * FROM devices WHERE ip_address = $1", ip_address)
+    row = await db.fetchrow(
+        "SELECT * FROM devices WHERE profile_id = $1 AND ip_address = $2",
+        profile_id,
+        ip_address,
+    )
     return Device(**dict(row)) if row else None
+
+
+async def update_device(
+    device_id: UUID, name: str | None = None, location: str | None = None
+) -> Device | None:
+    """Update device name or location."""
+    db = get_db()
+    row = await db.fetchrow(
+        """
+        UPDATE devices
+        SET name = COALESCE($2, name), location = COALESCE($3, location)
+        WHERE id = $1
+        RETURNING *
+        """,
+        device_id,
+        name,
+        location,
+    )
+    return Device(**dict(row)) if row else None
+
+
+async def update_profile_description(profile_id: UUID, description: str | None) -> bool:
+    """Update profile description."""
+    db = get_db()
+    result = await db.execute(
+        """
+        UPDATE profiles
+        SET description = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        """,
+        profile_id,
+        description,
+    )
+    return result == "UPDATE 1"
 
 
 # ============================================================================

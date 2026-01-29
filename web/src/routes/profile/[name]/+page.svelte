@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import {
 		getProfile,
 		getBlocklists,
@@ -11,6 +11,7 @@
 		getProfileLogs,
 		createRule,
 		deleteRule,
+		profileLogin,
 		type ProfileDetails,
 		type Blocklist,
 		type QueryLog
@@ -27,7 +28,7 @@
 	// Auth state
 	let needsPassword = false;
 	let passwordInput = '';
-	let authPassword: string | undefined = undefined;
+	let authToken: string | undefined = undefined;
 
 	// Form state
 	let newRuleDomain = '';
@@ -46,7 +47,73 @@
 	let deleteConfirmName = '';
 	let deleting = false;
 
+	// Pause countdown timer
+	let countdownInterval: ReturnType<typeof setInterval> | null = null;
+	let remainingSeconds = 0;
+
 	$: profileName = $page.params.name;
+
+	// Format remaining time as "Xm Ys"
+	function formatCountdown(seconds: number): string {
+		if (seconds <= 0) return '0s';
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		if (mins > 0) {
+			return `${mins}m ${secs}s`;
+		}
+		return `${secs}s`;
+	}
+
+	// Start or update countdown timer
+	function startCountdown() {
+		stopCountdown();
+		if (!profile?.is_filtering_paused || !profile?.filtering_paused_until) {
+			remainingSeconds = 0;
+			return;
+		}
+
+		const until = new Date(profile.filtering_paused_until).getTime();
+		const now = Date.now();
+
+		// If already expired, just set to 0 and don't auto-reload (prevents loop)
+		if (until <= now) {
+			remainingSeconds = 0;
+			return;
+		}
+
+		const updateRemaining = () => {
+			const now = Date.now();
+			remainingSeconds = Math.max(0, Math.floor((until - now) / 1000));
+
+			if (remainingSeconds <= 0) {
+				stopCountdown();
+				// Auto-refresh when timer expires
+				loadData();
+			}
+		};
+
+		updateRemaining();
+		countdownInterval = setInterval(updateRemaining, 1000);
+	}
+
+	function stopCountdown() {
+		if (countdownInterval) {
+			clearInterval(countdownInterval);
+			countdownInterval = null;
+		}
+	}
+
+	// Watch for pause state changes
+	$: if (profile?.is_filtering_paused) {
+		startCountdown();
+	} else {
+		stopCountdown();
+		remainingSeconds = 0;
+	}
+
+	onDestroy(() => {
+		stopCountdown();
+	});
 
 	// Normalize category names (consolidate social-* into social, etc.)
 	function normalizeCategory(category: string | null): string {
@@ -106,7 +173,7 @@
 		error = '';
 		needsPassword = false;
 
-		const profileResult = await getProfile(profileName, authPassword);
+		const profileResult = await getProfile(profileName, authToken);
 
 		if (profileResult.status === 401) {
 			loading = false;
@@ -124,7 +191,7 @@
 		// Profile loaded successfully, now load other data
 		const [blocklistsResult, logsResult] = await Promise.all([
 			getBlocklists(),
-			getProfileLogs(profileName, { limit: 50 }, authPassword)
+			getProfileLogs(profileName, { limit: 50 }, authToken)
 		]);
 
 		loading = false;
@@ -134,13 +201,20 @@
 	}
 
 	async function handlePasswordSubmit() {
-		authPassword = passwordInput;
-		await loadData();
-		if (needsPassword) {
-			toasts.error('Incorrect password');
+		// Call login endpoint to get a secure token
+		const loginResult = await profileLogin(profileName, passwordInput);
+		if (loginResult.error) {
+			toasts.error(loginResult.error);
 			passwordInput = '';
-			authPassword = undefined;
+			return;
 		}
+
+		// Store the token for subsequent requests
+		authToken = loginResult.data?.token;
+		passwordInput = '';
+
+		// Now load the profile data with the token
+		await loadData();
 	}
 
 	async function toggleBlocklist(blocklistId: string) {
@@ -150,7 +224,7 @@
 			? profile.blocklists.filter((id) => id !== blocklistId)
 			: [...profile.blocklists, blocklistId];
 
-		const result = await updateProfile(profileName, { blocklists: newBlocklists }, authPassword);
+		const result = await updateProfile(profileName, { blocklists: newBlocklists }, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -175,7 +249,7 @@
 			newBlocklists = [...profile.blocklists, ...toAdd];
 		}
 
-		const result = await updateProfile(profileName, { blocklists: newBlocklists }, authPassword);
+		const result = await updateProfile(profileName, { blocklists: newBlocklists }, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -185,7 +259,7 @@
 	}
 
 	async function handlePause(minutes: number) {
-		const result = await pauseFiltering(profileName, minutes, authPassword);
+		const result = await pauseFiltering(profileName, minutes, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -195,7 +269,7 @@
 	}
 
 	async function handleResume() {
-		const result = await resumeFiltering(profileName, authPassword);
+		const result = await resumeFiltering(profileName, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -207,7 +281,7 @@
 	async function handleAddRule() {
 		if (!newRuleDomain.trim()) return;
 
-		const result = await createRule(profileName, newRuleDomain.trim(), newRuleType, authPassword);
+		const result = await createRule(profileName, newRuleDomain.trim(), newRuleType, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -218,7 +292,7 @@
 	}
 
 	async function handleDeleteRule(ruleId: string) {
-		const result = await deleteRule(profileName, ruleId, authPassword);
+		const result = await deleteRule(profileName, ruleId, authToken);
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
@@ -231,7 +305,7 @@
 		const result = await getProfileLogs(profileName, {
 			limit: 50,
 			blocked: showBlockedOnly
-		}, authPassword);
+		}, authToken);
 		if (result.data) {
 			logs = result.data.logs;
 		}
@@ -249,7 +323,7 @@
 		}
 
 		savingPassword = true;
-		const result = await updateProfile(profileName, { password: newPassword || null }, authPassword);
+		const result = await updateProfile(profileName, { password: newPassword || null }, authToken);
 		savingPassword = false;
 
 		if (result.error) {
@@ -257,10 +331,12 @@
 		} else {
 			if (newPassword) {
 				toasts.success('Password set successfully');
-				authPassword = newPassword; // Update auth for subsequent requests
+				// Get a new token with the new password
+				const loginResult = await profileLogin(profileName, newPassword);
+				authToken = loginResult.data?.token;
 			} else {
 				toasts.success('Password removed');
-				authPassword = undefined;
+				authToken = undefined;
 			}
 			newPassword = '';
 			confirmPassword = '';
@@ -271,14 +347,14 @@
 
 	async function handleRemovePassword() {
 		savingPassword = true;
-		const result = await updateProfile(profileName, { password: null }, authPassword);
+		const result = await updateProfile(profileName, { password: null }, authToken);
 		savingPassword = false;
 
 		if (result.error) {
 			toasts.error(result.error);
 		} else {
 			toasts.success('Password removed');
-			authPassword = undefined;
+			authToken = undefined;
 			await loadData();
 		}
 	}
@@ -290,7 +366,7 @@
 		}
 
 		deleting = true;
-		const result = await deleteProfile(profileName, authPassword);
+		const result = await deleteProfile(profileName, authToken);
 		deleting = false;
 
 		if (result.error) {
@@ -338,19 +414,30 @@
 				<h1>{profile.name}</h1>
 				<p class="endpoint">{profile.dns_endpoint}</p>
 			</div>
-			{#if profile.is_filtering_paused}
-				<div class="pause-banner">
-					<span>Filtering paused until {new Date(profile.filtering_paused_until || '').toLocaleTimeString()}</span>
-					<button class="btn btn-small" on:click={handleResume}>Resume</button>
-				</div>
-			{:else}
-				<div class="pause-controls">
-					<span>Pause filtering:</span>
-					<button class="btn btn-small btn-outline" on:click={() => handlePause(5)}>5 min</button>
-					<button class="btn btn-small btn-outline" on:click={() => handlePause(15)}>15 min</button>
-					<button class="btn btn-small btn-outline" on:click={() => handlePause(30)}>30 min</button>
-				</div>
-			{/if}
+			<div class="filtering-toggle">
+				<label class="toggle-switch">
+					<input
+						type="checkbox"
+						checked={!profile.is_filtering_paused}
+						on:change={() => profile.is_filtering_paused ? handleResume() : handlePause(30)}
+					/>
+					<span class="toggle-slider"></span>
+				</label>
+				{#if profile.is_filtering_paused}
+					<div class="toggle-status paused">
+						<span class="status-text">Paused: {formatCountdown(remainingSeconds)}</span>
+					</div>
+				{:else}
+					<span class="toggle-status active">Filtering enabled</span>
+				{/if}
+				{#if !profile.is_filtering_paused}
+					<div class="pause-buttons">
+						<button class="btn btn-small btn-outline" on:click={() => handlePause(5)}>5m</button>
+						<button class="btn btn-small btn-outline" on:click={() => handlePause(15)}>15m</button>
+						<button class="btn btn-small btn-outline" on:click={() => handlePause(30)}>30m</button>
+					</div>
+				{/if}
+			</div>
 		</header>
 
 		<!-- Stats -->
@@ -657,20 +744,85 @@
 		margin: 0;
 	}
 
-	.pause-banner {
-		background: var(--warning);
-		color: black;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
 	.pause-controls {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+
+	.filtering-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.toggle-switch {
+		position: relative;
+		display: inline-block;
+		width: 50px;
+		height: 26px;
+	}
+
+	.toggle-switch input {
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+
+	.toggle-slider {
+		position: absolute;
+		cursor: pointer;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: var(--warning);
+		transition: 0.3s;
+		border-radius: 26px;
+	}
+
+	.toggle-slider:before {
+		position: absolute;
+		content: "";
+		height: 20px;
+		width: 20px;
+		left: 3px;
+		bottom: 3px;
+		background-color: white;
+		transition: 0.3s;
+		border-radius: 50%;
+	}
+
+	.toggle-switch input:checked + .toggle-slider {
+		background-color: var(--success);
+	}
+
+	.toggle-switch input:checked + .toggle-slider:before {
+		transform: translateX(24px);
+	}
+
+	.toggle-status {
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	.toggle-status.active {
+		color: var(--success);
+	}
+
+	.toggle-status.paused {
+		color: var(--warning);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.pause-buttons {
+		display: flex;
+		gap: 0.25rem;
+		margin-left: 0.5rem;
+		padding-left: 0.75rem;
+		border-left: 1px solid var(--border);
 	}
 
 	.stats-section {

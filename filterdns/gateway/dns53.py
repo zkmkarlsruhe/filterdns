@@ -3,6 +3,7 @@
 import asyncio
 from typing import Callable
 
+import dns.exception
 import dns.message
 import structlog
 
@@ -38,9 +39,30 @@ class DNS53Protocol(asyncio.DatagramProtocol):
         """Process DNS query and send response."""
         client_ip = addr[0]
 
+        # Sanity check on packet size to prevent DoS
+        if len(data) < 12:  # DNS header minimum
+            logger.warning("DNS53 packet too small", client_ip=client_ip, size=len(data))
+            return
+        if len(data) > 4096:  # Reasonable max for DNS over UDP
+            logger.warning("DNS53 packet too large", client_ip=client_ip, size=len(data))
+            return
+
         try:
-            # Parse DNS query
-            query = dns.message.from_wire(data)
+            # Parse DNS query with timeout to prevent pointer loop DoS
+            # dnspython should handle pointer loops, but add timeout as defense in depth
+            try:
+                query = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, dns.message.from_wire, data
+                    ),
+                    timeout=1.0  # 1 second max for parsing
+                )
+            except asyncio.TimeoutError:
+                logger.warning("DNS53 parse timeout (possible malformed packet)", client_ip=client_ip)
+                return
+            except dns.exception.FormError as e:
+                logger.warning("DNS53 malformed query", client_ip=client_ip, error=str(e))
+                return
 
             # Resolve client from IP
             client = await self.client_resolver.resolve_from_ip(client_ip)

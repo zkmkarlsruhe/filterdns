@@ -7,14 +7,63 @@ Naming convention (museum-focused):
 """
 
 import asyncio
+import ipaddress
 import json
 from datetime import datetime
 from typing import Any, AsyncGenerator
 from uuid import UUID
 
 from quart import Blueprint, Response, jsonify, make_response, request, session
+import structlog
 
-from filterdns.api.auth import admin_required, profile_auth_optional, verify_admin_password
+logger = structlog.get_logger()
+
+
+def get_client_ip() -> str | None:
+    """Extract and validate client IP address from request.
+
+    Returns None if IP cannot be determined or is invalid.
+    """
+    # Try X-Forwarded-For first (for proxied requests)
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # Take the first IP in the chain (original client)
+        ip = forwarded.split(",")[0].strip()
+    else:
+        ip = request.remote_addr
+
+    if not ip:
+        return None
+
+    # Validate IP address format
+    try:
+        ipaddress.ip_address(ip)
+        return ip
+    except ValueError:
+        logger.warning("Invalid IP address in request", ip=ip)
+        return None
+
+
+def parse_int_param(value: str | None, default: int, min_val: int = 0, max_val: int | None = None) -> int:
+    """Safely parse integer parameter with bounds checking."""
+    if value is None:
+        return default
+    try:
+        result = int(value)
+        result = max(result, min_val)
+        if max_val is not None:
+            result = min(result, max_val)
+        return result
+    except (ValueError, TypeError):
+        return default
+
+from filterdns.api.auth import (
+    admin_required,
+    generate_profile_token,
+    profile_auth_optional,
+    revoke_profile_token,
+    verify_admin_password,
+)
 from filterdns.blocklist.engine import get_engine
 from filterdns.config import settings
 from filterdns.db import queries
@@ -107,7 +156,60 @@ def create_api_blueprint() -> Blueprint:
                 }
             ), 201
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Profile creation failed", error=str(e), exc_info=True)
+            return jsonify({"error": "Failed to create profile"}), 500
+
+    @bp.route("/profiles/<profile_name>/login", methods=["POST"])
+    async def profile_login(profile_name: str) -> tuple[dict[str, Any], int]:
+        """Authenticate to a profile and receive an access token.
+
+        This endpoint verifies the password and returns a secure token
+        that can be used for subsequent API requests.
+        """
+        profile = await queries.get_profile_by_name(profile_name)
+        if not profile:
+            return jsonify({"error": "Profile not found"}), 404
+
+        # If profile has no password, return error (use direct access)
+        if not profile.password_hash:
+            return jsonify({"error": "Profile has no password set"}), 400
+
+        data = await request.get_json()
+        if not data:
+            return jsonify({"error": "Request body required"}), 400
+
+        password = data.get("password", "")
+        if not password:
+            return jsonify({"error": "Password required"}), 400
+
+        # Verify password
+        import bcrypt
+        if not bcrypt.checkpw(password.encode(), profile.password_hash.encode()):
+            return jsonify({"error": "Invalid password"}), 401
+
+        # Generate secure token
+        token = generate_profile_token(profile.id)
+
+        return jsonify({
+            "token": token,
+            "expires_in": 3600,  # 1 hour
+            "profile_id": str(profile.id),
+        }), 200
+
+    @bp.route("/profiles/<profile_name>/logout", methods=["POST"])
+    async def profile_logout(profile_name: str) -> tuple[dict[str, Any], int]:
+        """Revoke the current access token."""
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+            revoke_profile_token(token)
+
+        # Also clear session
+        profile = await queries.get_profile_by_name(profile_name)
+        if profile:
+            session.pop(f"profile_{profile.id}", None)
+
+        return jsonify({"message": "Logged out"}), 200
 
     # =========================================================================
     # Device Onboarding API
@@ -125,12 +227,12 @@ def create_api_blueprint() -> Blueprint:
             return jsonify({"error": "Profile not found"}), 404
 
         # Get current device IP
-        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
-        if "," in device_ip:
-            device_ip = device_ip.split(",")[0].strip()
+        device_ip = get_client_ip()
 
         # Check if this device is already linked to this profile
-        existing_device = await queries.get_device_by_ip(profile.id, device_ip)
+        existing_device = None
+        if device_ip:
+            existing_device = await queries.get_device_by_ip(profile.id, device_ip)
 
         # Get device count for this profile
         devices = await queries.list_devices(profile.id)
@@ -167,9 +269,9 @@ def create_api_blueprint() -> Blueprint:
             return jsonify({"error": "Profile not found"}), 404
 
         # Get current device IP
-        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
-        if "," in device_ip:
-            device_ip = device_ip.split(",")[0].strip()
+        device_ip = get_client_ip()
+        if not device_ip:
+            return jsonify({"error": "Cannot determine device IP address"}), 400
 
         # Check for duplicate
         existing_device = await queries.get_device_by_ip(profile.id, device_ip)
@@ -250,7 +352,7 @@ def create_api_blueprint() -> Blueprint:
                 "dot_hostname": f"{profile.name}.{settings.domain}",
                 "has_password": profile.password_hash is not None,
                 "filtering_paused_until": (
-                    profile.filtering_paused_until.isoformat()
+                    profile.filtering_paused_until.isoformat() + "Z"
                     if profile.filtering_paused_until
                     else None
                 ),
@@ -344,7 +446,7 @@ def create_api_blueprint() -> Blueprint:
             {
                 "message": f"Filtering paused for {minutes} minutes",
                 "paused_until": (
-                    updated.filtering_paused_until.isoformat() if updated else None
+                    updated.filtering_paused_until.isoformat() + "Z" if updated else None
                 ),
             }
         ), 200
@@ -374,8 +476,8 @@ def create_api_blueprint() -> Blueprint:
             if not profile:
                 return jsonify({"error": "Profile not found"}), 404
 
-        limit = min(int(request.args.get("limit", 100)), 1000)
-        offset = int(request.args.get("offset", 0))
+        limit = parse_int_param(request.args.get("limit"), default=100, min_val=1, max_val=1000)
+        offset = parse_int_param(request.args.get("offset"), default=0, min_val=0)
         blocked_only = request.args.get("blocked", "").lower() == "true"
         domain_filter = request.args.get("domain")
 
@@ -464,8 +566,9 @@ def create_api_blueprint() -> Blueprint:
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    # Send error event
-                    yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                    # Log error but send generic message to client
+                    logger.error("SSE stream error", error=str(e), exc_info=True)
+                    yield f"event: error\ndata: {json.dumps({'error': 'Stream error'})}\n\n"
                     await asyncio.sleep(5)  # Wait longer on error
 
         response = await make_response(generate_sse())
@@ -486,7 +589,7 @@ def create_api_blueprint() -> Blueprint:
             if not profile:
                 return jsonify({"error": "Profile not found"}), 404
 
-        hours = min(int(request.args.get("hours", 24)), 168)  # Max 7 days
+        hours = parse_int_param(request.args.get("hours"), default=24, min_val=1, max_val=168)  # Max 7 days
         stats = await queries.get_profile_stats(profile.id, hours)
 
         return jsonify(
@@ -643,9 +746,15 @@ def create_api_blueprint() -> Blueprint:
         # Get IP from request body or auto-detect
         ip_address = data.get("ip_address", "").strip()
         if not ip_address:
-            ip_address = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
-            if "," in ip_address:
-                ip_address = ip_address.split(",")[0].strip()
+            ip_address = get_client_ip()
+
+        # Validate IP address
+        if not ip_address:
+            return jsonify({"error": "Cannot determine device IP address"}), 400
+        try:
+            ipaddress.ip_address(ip_address)
+        except ValueError:
+            return jsonify({"error": "Invalid IP address format"}), 400
 
         # Check for duplicate
         existing = await queries.get_device_by_ip(profile.id, ip_address)
@@ -733,9 +842,9 @@ def create_api_blueprint() -> Blueprint:
     @bp.route("/whoami", methods=["GET"])
     async def whoami() -> tuple[dict[str, Any], int]:
         """Detect current device (IP and PTR hostname)."""
-        device_ip = request.headers.get("X-Forwarded-For", request.remote_addr) or "unknown"
-        if "," in device_ip:
-            device_ip = device_ip.split(",")[0].strip()
+        device_ip = get_client_ip()
+        if not device_ip:
+            return jsonify({"error": "Cannot determine device IP address"}), 400
 
         # Try to get hostname via PTR
         from filterdns.dns.resolver import get_resolver
@@ -1105,7 +1214,12 @@ def create_api_blueprint() -> Blueprint:
                 }
             ), 201
         except Exception as e:
-            return jsonify({"error": str(e)}), 400
+            logger.warning("Blocklist creation failed", error=str(e))
+            # Check for common errors
+            error_msg = str(e).lower()
+            if "duplicate" in error_msg or "unique" in error_msg:
+                return jsonify({"error": "A blocklist with this ID already exists"}), 400
+            return jsonify({"error": "Failed to create blocklist"}), 400
 
     @bp.route("/admin/blocklists/<blocklist_id>", methods=["DELETE"])
     @admin_required
@@ -1199,7 +1313,11 @@ def create_api_blueprint() -> Blueprint:
                 }
             ), 201
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error("Preset creation failed", error=str(e), exc_info=True)
+            error_msg = str(e).lower()
+            if "duplicate" in error_msg or "unique" in error_msg:
+                return jsonify({"error": "A preset with this ID already exists"}), 400
+            return jsonify({"error": "Failed to create preset"}), 500
 
     @bp.route("/admin/presets/<preset_id>", methods=["GET"])
     @admin_required

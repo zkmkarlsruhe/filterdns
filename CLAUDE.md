@@ -56,6 +56,22 @@ Self-hosted DNS filtering service for ZKM museum. Provides ad/tracker blocking v
 ├── profiles.yaml           # Built-in presets definition
 └── pyproject.toml          # Python dependencies
 
+## Agent Warnings
+
+### Process Management
+**NEVER use `pkill python` or `killall python`** - this kills ALL Python processes including the running server, test runners, and other tools. Always use PID-specific killing:
+```bash
+# Find the specific process first
+ps aux | grep "python -m filterdns"
+
+# Kill by specific PID
+kill <PID>
+
+# Or use lsof to find process on a port
+lsof -i :8080 | grep LISTEN
+kill <PID>
+```
+
 ## Development Commands
 
 ### Start Backend (skip blocklist loading for faster startup)

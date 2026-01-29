@@ -1,10 +1,18 @@
 """Configuration management using pydantic-settings."""
 
+import secrets
+import sys
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# List of known weak/default passwords that should be rejected in production
+WEAK_PASSWORDS = {
+    "changeme", "password", "admin", "123456", "admin123",
+    "password123", "letmein", "welcome", "default", "root",
+}
 
 
 class Settings(BaseSettings):
@@ -54,11 +62,51 @@ class Settings(BaseSettings):
     log_retention_days: int = 30
     log_allowed: bool = True
 
-    # Admin auth
-    admin_password: str = "changeme"
+    # Admin auth - MUST be set via environment variable in production
+    # If not set, generates a random password and prints it to stdout
+    admin_password: str = ""
 
     # Development mode
     debug: bool = False
+
+    @field_validator("admin_password", mode="before")
+    @classmethod
+    def validate_admin_password(cls, v: str) -> str:
+        """Validate admin password is set and not weak."""
+        if not v:
+            # Generate random password if not set
+            generated = secrets.token_urlsafe(24)
+            print(
+                f"\n{'=' * 60}\n"
+                f"WARNING: FILTERDNS_ADMIN_PASSWORD not set!\n"
+                f"Generated random admin password: {generated}\n"
+                f"Set FILTERDNS_ADMIN_PASSWORD environment variable in production.\n"
+                f"{'=' * 60}\n",
+                file=sys.stderr,
+            )
+            return generated
+
+        if v.lower() in WEAK_PASSWORDS:
+            print(
+                f"\n{'=' * 60}\n"
+                f"SECURITY WARNING: Admin password '{v}' is weak/common!\n"
+                f"Please set a strong password via FILTERDNS_ADMIN_PASSWORD.\n"
+                f"{'=' * 60}\n",
+                file=sys.stderr,
+            )
+            # In debug mode, allow it with warning; in production, this is dangerous
+            # but we'll allow it to not break existing deployments
+
+        if len(v) < 8:
+            print(
+                f"\n{'=' * 60}\n"
+                f"SECURITY WARNING: Admin password is too short ({len(v)} chars)!\n"
+                f"Use at least 12 characters for production.\n"
+                f"{'=' * 60}\n",
+                file=sys.stderr,
+            )
+
+        return v
 
     @property
     def has_tls(self) -> bool:
