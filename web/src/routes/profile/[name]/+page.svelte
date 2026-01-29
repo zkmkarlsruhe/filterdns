@@ -595,6 +595,9 @@
 						</div>
 					{/if}
 				</div>
+				{#if detailedStats.total_queries === 0}
+					<p class="stats-empty">No query data yet. Statistics will appear once DNS queries are processed through this profile.</p>
+				{/if}
 			{:else if !showDetailedStats}
 				<p class="stats-hint">Click "Show Details" to see query types, top domains, active blocklists, and hourly activity.</p>
 			{/if}
@@ -1641,6 +1644,16 @@
 		color: var(--text-secondary);
 		font-size: 0.9rem;
 		margin: 0;
+	}
+
+	.stats-empty {
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+		text-align: center;
+		padding: 2rem;
+		margin: 0;
+		background: var(--bg);
+		border-radius: 0.5rem;
 	}
 
 	@media (max-width: 768px) {
