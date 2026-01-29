@@ -303,8 +303,12 @@ export interface ProfileStats {
 	blocked_queries: number;
 	allowed_queries: number;
 	blocked_percentage: number;
+	avg_response_time_ms: number | null;
 	top_blocked_domains: { domain: string; count: number }[];
+	top_allowed_domains: { domain: string; count: number }[];
 	queries_by_hour: { hour: number; count: number }[];
+	query_types: { type: string; count: number }[];
+	top_blocklists: { blocklist_id: string; count: number }[];
 }
 
 export interface AdminProfile {

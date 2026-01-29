@@ -599,10 +599,20 @@ def create_api_blueprint() -> Blueprint:
                 "blocked_queries": stats.blocked_queries,
                 "allowed_queries": stats.allowed_queries,
                 "blocked_percentage": round(stats.blocked_percentage, 1),
+                "avg_response_time_ms": stats.avg_response_time_ms,
                 "top_blocked_domains": [
                     {"domain": d, "count": c} for d, c in stats.top_blocked_domains
                 ],
+                "top_allowed_domains": [
+                    {"domain": d, "count": c} for d, c in stats.top_allowed_domains
+                ],
                 "queries_by_hour": [{"hour": h, "count": c} for h, c in stats.queries_by_hour],
+                "query_types": [
+                    {"type": t, "count": c} for t, c in stats.query_types
+                ],
+                "top_blocklists": [
+                    {"blocklist_id": b, "count": c} for b, c in stats.top_blocklists
+                ],
             }
         ), 200
 

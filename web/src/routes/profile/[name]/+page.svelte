@@ -9,10 +9,12 @@
 		pauseFiltering,
 		resumeFiltering,
 		getProfileLogs,
+		getProfileStats,
 		createRule,
 		deleteRule,
 		profileLogin,
 		type ProfileDetails,
+		type ProfileStats,
 		type Blocklist,
 		type QueryLog
 	} from '$lib/api';
@@ -22,8 +24,34 @@
 	let profile: ProfileDetails | null = null;
 	let blocklists: Blocklist[] = [];
 	let logs: QueryLog[] = [];
+	let detailedStats: ProfileStats | null = null;
 	let loading = true;
 	let error = '';
+	let showDetailedStats = false;
+
+	// Helper functions for bar chart calculations
+	function getBarWidth(count: number, items: { count: number }[]): number {
+		const max = Math.max(...items.map(i => i.count));
+		return max > 0 ? (count / max) * 100 : 0;
+	}
+
+	function getHourCount(hour: number): number {
+		if (!detailedStats) return 0;
+		const data = detailedStats.queries_by_hour.find(h => h.hour === hour);
+		return data?.count || 0;
+	}
+
+	function getHourBarHeight(hour: number): number {
+		if (!detailedStats || detailedStats.queries_by_hour.length === 0) return 0;
+		const max = Math.max(...detailedStats.queries_by_hour.map(h => h.count));
+		const count = getHourCount(hour);
+		return max > 0 ? (count / max) * 100 : 0;
+	}
+
+	function getBlocklistName(blocklistId: string): string {
+		const bl = blocklists.find(b => b.id === blocklistId);
+		return bl?.name || blocklistId;
+	}
 
 	// Auth state
 	let needsPassword = false;
@@ -189,15 +217,17 @@
 		}
 
 		// Profile loaded successfully, now load other data
-		const [blocklistsResult, logsResult] = await Promise.all([
+		const [blocklistsResult, logsResult, statsResult] = await Promise.all([
 			getBlocklists(),
-			getProfileLogs(profileName, { limit: 50 }, authToken)
+			getProfileLogs(profileName, { limit: 50 }, authToken),
+			getProfileStats(profileName, 24, authToken)
 		]);
 
 		loading = false;
 		profile = profileResult.data || null;
 		blocklists = blocklistsResult.data?.blocklists || [];
 		logs = logsResult.data?.logs || [];
+		detailedStats = statsResult.data || null;
 	}
 
 	async function handlePasswordSubmit() {
@@ -440,7 +470,7 @@
 			</div>
 		</header>
 
-		<!-- Stats -->
+		<!-- Stats Overview -->
 		<section class="stats-section">
 			<div class="stat-card">
 				<div class="stat-value">{profile.stats.total_queries.toLocaleString()}</div>
@@ -454,6 +484,120 @@
 				<div class="stat-value">{profile.stats.blocked_percentage}%</div>
 				<div class="stat-label">Block Rate</div>
 			</div>
+			{#if detailedStats?.avg_response_time_ms}
+				<div class="stat-card">
+					<div class="stat-value">{detailedStats.avg_response_time_ms}ms</div>
+					<div class="stat-label">Avg Response</div>
+				</div>
+			{/if}
+		</section>
+
+		<!-- Detailed Stats Toggle -->
+		<section class="card">
+			<div class="card-header">
+				<h2>Statistics</h2>
+				<button class="btn btn-small btn-outline" on:click={() => showDetailedStats = !showDetailedStats}>
+					{showDetailedStats ? 'Hide Details' : 'Show Details'}
+				</button>
+			</div>
+
+			{#if showDetailedStats && detailedStats}
+				<div class="stats-details">
+					<!-- Query Types -->
+					{#if detailedStats.query_types.length > 0}
+						<div class="stats-subsection">
+							<h4>Query Types</h4>
+							<div class="stats-bar-chart">
+								{#each detailedStats.query_types as qt}
+									<div class="bar-row">
+										<span class="bar-label">{qt.type}</span>
+										<div class="bar-container">
+											<div class="bar" style="width: {getBarWidth(qt.count, detailedStats.query_types)}%"></div>
+										</div>
+										<span class="bar-value">{qt.count.toLocaleString()}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Top Allowed Domains -->
+					{#if detailedStats.top_allowed_domains.length > 0}
+						<div class="stats-subsection">
+							<h4>Top Allowed Domains</h4>
+							<div class="domain-list">
+								{#each detailedStats.top_allowed_domains.slice(0, 5) as item}
+									<div class="domain-row">
+										<span class="domain-name">{item.domain}</span>
+										<span class="domain-count">{item.count.toLocaleString()}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Top Blocked Domains -->
+					{#if detailedStats.top_blocked_domains.length > 0}
+						<div class="stats-subsection">
+							<h4>Top Blocked Domains</h4>
+							<div class="domain-list blocked">
+								{#each detailedStats.top_blocked_domains.slice(0, 5) as item}
+									<div class="domain-row">
+										<span class="domain-name">{item.domain}</span>
+										<span class="domain-count">{item.count.toLocaleString()}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Top Blocklists -->
+					{#if detailedStats.top_blocklists.length > 0}
+						<div class="stats-subsection">
+							<h4>Most Active Blocklists</h4>
+							<div class="blocklist-stats">
+								{#each detailedStats.top_blocklists.slice(0, 5) as bl}
+									<div class="bar-row">
+										<span class="bar-label" title={bl.blocklist_id}>
+											{getBlocklistName(bl.blocklist_id)}
+										</span>
+										<div class="bar-container">
+											<div class="bar blocked" style="width: {getBarWidth(bl.count, detailedStats.top_blocklists)}%"></div>
+										</div>
+										<span class="bar-value">{bl.count.toLocaleString()}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
+					<!-- Queries by Hour -->
+					{#if detailedStats.queries_by_hour.length > 0}
+						<div class="stats-subsection">
+							<h4>Activity by Hour</h4>
+							<div class="hourly-chart">
+								{#each Array(24) as _, hour}
+									<div class="hour-bar" title="{hour}:00 - {getHourCount(hour)} queries">
+										<div
+											class="hour-fill"
+											style="height: {getHourBarHeight(hour)}%"
+										></div>
+									</div>
+								{/each}
+							</div>
+							<div class="hour-labels">
+								<span>0</span>
+								<span>6</span>
+								<span>12</span>
+								<span>18</span>
+								<span>23</span>
+							</div>
+						</div>
+					{/if}
+				</div>
+			{:else if !showDetailedStats}
+				<p class="stats-hint">Click "Show Details" to see query types, top domains, active blocklists, and hourly activity.</p>
+			{/if}
 		</section>
 
 		<!-- Setup Instructions -->
@@ -1353,12 +1497,162 @@
 		gap: 0.5rem;
 	}
 
+	/* Detailed Stats Styles */
+	.stats-details {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1.5rem;
+		margin-top: 1rem;
+	}
+
+	.stats-subsection {
+		background: var(--bg);
+		border-radius: 0.5rem;
+		padding: 1rem;
+	}
+
+	.stats-subsection h4 {
+		margin: 0 0 0.75rem 0;
+		font-size: 0.9rem;
+		color: var(--text-secondary);
+	}
+
+	.stats-bar-chart {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.bar-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.bar-label {
+		width: 60px;
+		font-size: 0.8rem;
+		font-family: monospace;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.bar-container {
+		flex: 1;
+		height: 16px;
+		background: var(--bg-secondary);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	.bar {
+		height: 100%;
+		background: var(--primary);
+		border-radius: 4px;
+		transition: width 0.3s ease;
+	}
+
+	.bar.blocked {
+		background: var(--danger);
+	}
+
+	.bar-value {
+		width: 60px;
+		font-size: 0.8rem;
+		text-align: right;
+		color: var(--text-secondary);
+	}
+
+	.domain-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.domain-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.25rem 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.domain-row:last-child {
+		border-bottom: none;
+	}
+
+	.domain-name {
+		font-family: monospace;
+		font-size: 0.8rem;
+		color: var(--success);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 70%;
+	}
+
+	.domain-list.blocked .domain-name {
+		color: var(--danger);
+	}
+
+	.domain-count {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.blocklist-stats .bar-label {
+		width: 100px;
+	}
+
+	/* Hourly Activity Chart */
+	.hourly-chart {
+		display: flex;
+		align-items: flex-end;
+		height: 60px;
+		gap: 2px;
+	}
+
+	.hour-bar {
+		flex: 1;
+		height: 100%;
+		background: var(--bg-secondary);
+		border-radius: 2px 2px 0 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+	}
+
+	.hour-fill {
+		background: var(--primary);
+		border-radius: 2px 2px 0 0;
+		transition: height 0.3s ease;
+	}
+
+	.hour-labels {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.7rem;
+		color: var(--text-secondary);
+		margin-top: 0.25rem;
+	}
+
+	.stats-hint {
+		color: var(--text-secondary);
+		font-size: 0.9rem;
+		margin: 0;
+	}
+
 	@media (max-width: 768px) {
 		.stats-section {
-			grid-template-columns: 1fr;
+			grid-template-columns: repeat(2, 1fr);
 		}
 
 		.setup-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.stats-details {
 			grid-template-columns: 1fr;
 		}
 	}

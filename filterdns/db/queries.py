@@ -517,12 +517,13 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
     db = get_db()
     since = datetime.utcnow() - timedelta(hours=hours)
 
-    # Total and blocked counts
+    # Total, blocked counts, and avg response time
     counts = await db.fetchrow(
         """
         SELECT
             COUNT(*) as total,
-            SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked
+            SUM(CASE WHEN blocked THEN 1 ELSE 0 END) as blocked,
+            AVG(response_time_ms) as avg_response_time
         FROM query_logs
         WHERE profile_id = $1 AND timestamp > $2
         """,
@@ -533,6 +534,7 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
     total = counts["total"] or 0
     blocked = counts["blocked"] or 0
     allowed = total - blocked
+    avg_response_time = counts["avg_response_time"]
 
     # Top blocked domains
     top_blocked = await db.fetch(
@@ -540,6 +542,20 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
         SELECT domain, COUNT(*) as count
         FROM query_logs
         WHERE profile_id = $1 AND timestamp > $2 AND blocked = TRUE
+        GROUP BY domain
+        ORDER BY count DESC
+        LIMIT 10
+        """,
+        profile_id,
+        since,
+    )
+
+    # Top allowed domains
+    top_allowed = await db.fetch(
+        """
+        SELECT domain, COUNT(*) as count
+        FROM query_logs
+        WHERE profile_id = $1 AND timestamp > $2 AND blocked = FALSE
         GROUP BY domain
         ORDER BY count DESC
         LIMIT 10
@@ -561,13 +577,44 @@ async def get_profile_stats(profile_id: UUID, hours: int = 24) -> ProfileStats:
         since,
     )
 
+    # Query type distribution
+    query_types = await db.fetch(
+        """
+        SELECT query_type, COUNT(*) as count
+        FROM query_logs
+        WHERE profile_id = $1 AND timestamp > $2
+        GROUP BY query_type
+        ORDER BY count DESC
+        """,
+        profile_id,
+        since,
+    )
+
+    # Top blocklists (which blocklists are blocking the most)
+    top_blocklists = await db.fetch(
+        """
+        SELECT blocklist_id, COUNT(*) as count
+        FROM query_logs
+        WHERE profile_id = $1 AND timestamp > $2 AND blocked = TRUE AND blocklist_id IS NOT NULL
+        GROUP BY blocklist_id
+        ORDER BY count DESC
+        LIMIT 10
+        """,
+        profile_id,
+        since,
+    )
+
     return ProfileStats(
         total_queries=total,
         blocked_queries=blocked,
         allowed_queries=allowed,
         blocked_percentage=(blocked / total * 100) if total > 0 else 0,
         top_blocked_domains=[(row["domain"], row["count"]) for row in top_blocked],
+        top_allowed_domains=[(row["domain"], row["count"]) for row in top_allowed],
         queries_by_hour=[(row["hour"], row["count"]) for row in by_hour],
+        query_types=[(row["query_type"], row["count"]) for row in query_types],
+        avg_response_time_ms=round(avg_response_time, 2) if avg_response_time else None,
+        top_blocklists=[(row["blocklist_id"], row["count"]) for row in top_blocklists],
     )
 
 
