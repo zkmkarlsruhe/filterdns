@@ -5,6 +5,7 @@
 		getProfile,
 		getBlocklists,
 		updateProfile,
+		deleteProfile,
 		pauseFiltering,
 		resumeFiltering,
 		getProfileLogs,
@@ -15,6 +16,7 @@
 		type QueryLog
 	} from '$lib/api';
 	import { toasts } from '$lib/stores';
+	import { goto } from '$app/navigation';
 
 	let profile: ProfileDetails | null = null;
 	let blocklists: Blocklist[] = [];
@@ -38,6 +40,11 @@
 	let newPassword = '';
 	let confirmPassword = '';
 	let savingPassword = false;
+
+	// Delete confirmation
+	let showDeleteConfirm = false;
+	let deleteConfirmName = '';
+	let deleting = false;
 
 	$: profileName = $page.params.name;
 
@@ -273,6 +280,24 @@
 			toasts.success('Password removed');
 			authPassword = undefined;
 			await loadData();
+		}
+	}
+
+	async function handleDeleteProfile() {
+		if (deleteConfirmName !== profileName) {
+			toasts.error('Profile name does not match');
+			return;
+		}
+
+		deleting = true;
+		const result = await deleteProfile(profileName, authPassword);
+		deleting = false;
+
+		if (result.error) {
+			toasts.error(result.error);
+		} else {
+			toasts.success('Profile deleted');
+			goto('/');
 		}
 	}
 </script>
@@ -556,6 +581,43 @@
 				</div>
 			{:else}
 				<p class="empty">No queries yet</p>
+			{/if}
+		</section>
+
+		<!-- Danger Zone -->
+		<section class="card danger-zone">
+			<h2>Danger Zone</h2>
+			{#if !showDeleteConfirm}
+				<div class="danger-item">
+					<div>
+						<h4>Delete this profile</h4>
+						<p>Once deleted, all settings, rules, and logs for this profile will be permanently removed.</p>
+					</div>
+					<button class="btn btn-danger" on:click={() => showDeleteConfirm = true}>
+						Delete Profile
+					</button>
+				</div>
+			{:else}
+				<div class="delete-confirm">
+					<p class="warning-text">This action cannot be undone. Please type <strong>{profileName}</strong> to confirm.</p>
+					<input
+						type="text"
+						bind:value={deleteConfirmName}
+						placeholder="Type profile name to confirm"
+					/>
+					<div class="confirm-actions">
+						<button
+							class="btn btn-danger"
+							on:click={handleDeleteProfile}
+							disabled={deleting || deleteConfirmName !== profileName}
+						>
+							{deleting ? 'Deleting...' : 'I understand, delete this profile'}
+						</button>
+						<button class="btn btn-outline" on:click={() => { showDeleteConfirm = false; deleteConfirmName = ''; }}>
+							Cancel
+						</button>
+					</div>
+				</div>
 			{/if}
 		</section>
 	</div>
@@ -1081,6 +1143,62 @@
 	.btn-small {
 		padding: 0.25rem 0.5rem;
 		font-size: 0.75rem;
+	}
+
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.danger-zone {
+		border-color: var(--danger);
+		margin-top: 2rem;
+	}
+
+	.danger-zone h2 {
+		color: var(--danger);
+	}
+
+	.danger-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.danger-item h4 {
+		margin: 0 0 0.25rem 0;
+	}
+
+	.danger-item p {
+		margin: 0;
+		color: var(--text-secondary);
+		font-size: 0.875rem;
+	}
+
+	.delete-confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.delete-confirm input {
+		padding: 0.75rem 1rem;
+		background: var(--bg);
+		border: 1px solid var(--danger);
+		border-radius: 0.5rem;
+		color: var(--text);
+		font-size: 1rem;
+	}
+
+	.warning-text {
+		color: var(--danger);
+		margin: 0;
+	}
+
+	.confirm-actions {
+		display: flex;
+		gap: 0.5rem;
 	}
 
 	@media (max-width: 768px) {
