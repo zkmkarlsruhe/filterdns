@@ -1017,6 +1017,62 @@ async def set_profile_blocklists_versioned(profile_id: UUID, blocklist_ids: list
 
 
 # ============================================================================
+# Admin Settings
+# ============================================================================
+
+
+async def get_admin_setting(key: str) -> str | None:
+    """Get an admin setting by key."""
+    db = get_db()
+    row = await db.fetchrow(
+        "SELECT value FROM admin_settings WHERE key = $1",
+        key,
+    )
+    return row["value"] if row else None
+
+
+async def set_admin_setting(key: str, value: str) -> None:
+    """Set an admin setting."""
+    db = get_db()
+    await db.execute(
+        """
+        INSERT INTO admin_settings (key, value, updated_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (key) DO UPDATE SET
+            value = EXCLUDED.value,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        key,
+        value,
+    )
+
+
+async def get_all_admin_settings() -> dict[str, str]:
+    """Get all admin settings."""
+    db = get_db()
+    rows = await db.fetch("SELECT key, value FROM admin_settings")
+    return {row["key"]: row["value"] for row in rows}
+
+
+async def get_default_blocklists() -> list[str]:
+    """Get the list of default blocklists for new profiles."""
+    import json
+    value = await get_admin_setting("default_blocklists")
+    if value:
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+async def set_default_blocklists(blocklist_ids: list[str]) -> None:
+    """Set the list of default blocklists for new profiles."""
+    import json
+    await set_admin_setting("default_blocklists", json.dumps(blocklist_ids))
+
+
+# ============================================================================
 # Backwards Compatibility Aliases
 # ============================================================================
 

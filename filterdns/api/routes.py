@@ -87,8 +87,10 @@ def create_api_blueprint() -> Blueprint:
                 ProfileCreate(name=name, password=data.get("password"), description=data.get("description"))
             )
 
-            # Set default blocklists (Hagezi Multi Normal)
-            await queries.add_profile_blocklist(profile.id, "hagezi-multi-normal")
+            # Set default blocklists from admin settings
+            default_blocklists = await queries.get_default_blocklists()
+            for blocklist_id in default_blocklists:
+                await queries.add_profile_blocklist(profile.id, blocklist_id)
 
             return jsonify(
                 {
@@ -1273,6 +1275,57 @@ def create_api_blueprint() -> Blueprint:
         remove_preset_from_engine(engine, preset_id)
 
         return jsonify({"message": "Preset deleted"}), 200
+
+    # =========================================================================
+    # Admin Settings
+    # =========================================================================
+
+    @bp.route("/admin/settings", methods=["GET"])
+    @admin_required
+    async def admin_get_settings() -> tuple[dict[str, Any], int]:
+        """Get all admin settings (admin only)."""
+        settings_data = await queries.get_all_admin_settings()
+
+        # Parse JSON values for known settings
+        import json
+        default_blocklists = []
+        if "default_blocklists" in settings_data:
+            try:
+                default_blocklists = json.loads(settings_data["default_blocklists"])
+            except json.JSONDecodeError:
+                pass
+
+        return jsonify({
+            "default_blocklists": default_blocklists,
+        }), 200
+
+    @bp.route("/admin/settings", methods=["PUT"])
+    @admin_required
+    async def admin_update_settings() -> tuple[dict[str, Any], int]:
+        """Update admin settings (admin only)."""
+        data = await request.get_json()
+
+        if "default_blocklists" in data:
+            blocklist_ids = data["default_blocklists"]
+            if not isinstance(blocklist_ids, list):
+                return jsonify({"error": "default_blocklists must be a list"}), 400
+
+            # Validate that all blocklists exist
+            all_blocklists = await queries.list_blocklists()
+            valid_ids = {bl.id for bl in all_blocklists}
+            invalid = [bid for bid in blocklist_ids if bid not in valid_ids]
+            if invalid:
+                return jsonify({"error": f"Invalid blocklist IDs: {invalid}"}), 400
+
+            await queries.set_default_blocklists(blocklist_ids)
+
+        # Get updated settings
+        default_blocklists = await queries.get_default_blocklists()
+
+        return jsonify({
+            "default_blocklists": default_blocklists,
+            "message": "Settings updated",
+        }), 200
 
     # =========================================================================
     # Health Check

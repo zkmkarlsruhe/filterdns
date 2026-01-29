@@ -5,8 +5,12 @@
 		adminLogout,
 		adminGetProfiles,
 		adminGetStats,
+		adminGetSettings,
+		adminUpdateSettings,
+		getBlocklists,
 		type AdminProfile,
-		type GlobalStats
+		type GlobalStats,
+		type Blocklist
 	} from '$lib/api';
 	import { isAdmin, toasts } from '$lib/stores';
 
@@ -15,6 +19,24 @@
 	let profiles: AdminProfile[] = [];
 	let stats: GlobalStats | null = null;
 	let loading = true;
+
+	// Settings state
+	let allBlocklists: Blocklist[] = [];
+	let defaultBlocklists: string[] = [];
+	let savingSettings = false;
+	let expandedSettingsCategories: Set<string> = new Set();
+
+	// Group blocklists by category
+	$: blocklistsByCategory = allBlocklists
+		.filter(bl => bl.domain_count > 0)
+		.reduce((acc, bl) => {
+			const category = bl.category || 'other';
+			if (!acc[category]) acc[category] = [];
+			acc[category].push(bl);
+			return acc;
+		}, {} as Record<string, Blocklist[]>);
+
+	$: sortedCategories = Object.keys(blocklistsByCategory).sort();
 
 	onMount(async () => {
 		if ($isAdmin) {
@@ -42,11 +64,18 @@
 		isAdmin.set(false);
 		profiles = [];
 		stats = null;
+		allBlocklists = [];
+		defaultBlocklists = [];
 	}
 
 	async function loadData() {
 		loading = true;
-		const [profilesResult, statsResult] = await Promise.all([adminGetProfiles(), adminGetStats()]);
+		const [profilesResult, statsResult, settingsResult, blocklistsResult] = await Promise.all([
+			adminGetProfiles(),
+			adminGetStats(),
+			adminGetSettings(),
+			getBlocklists()
+		]);
 
 		if (profilesResult.data) {
 			profiles = profilesResult.data.profiles;
@@ -54,7 +83,64 @@
 		if (statsResult.data) {
 			stats = statsResult.data;
 		}
+		if (settingsResult.data) {
+			defaultBlocklists = settingsResult.data.default_blocklists || [];
+		}
+		if (blocklistsResult.data) {
+			allBlocklists = blocklistsResult.data.blocklists;
+		}
 		loading = false;
+	}
+
+	function toggleSettingsCategory(category: string) {
+		if (expandedSettingsCategories.has(category)) {
+			expandedSettingsCategories.delete(category);
+		} else {
+			expandedSettingsCategories.add(category);
+		}
+		expandedSettingsCategories = expandedSettingsCategories;
+	}
+
+	function toggleDefaultBlocklist(blocklistId: string) {
+		if (defaultBlocklists.includes(blocklistId)) {
+			defaultBlocklists = defaultBlocklists.filter(id => id !== blocklistId);
+		} else {
+			defaultBlocklists = [...defaultBlocklists, blocklistId];
+		}
+	}
+
+	function toggleCategoryDefaults(category: string) {
+		const categoryBlocklists = blocklistsByCategory[category] || [];
+		const allEnabled = categoryBlocklists.every(bl => defaultBlocklists.includes(bl.id));
+
+		if (allEnabled) {
+			// Disable all in category
+			defaultBlocklists = defaultBlocklists.filter(
+				id => !categoryBlocklists.some(bl => bl.id === id)
+			);
+		} else {
+			// Enable all in category
+			const newIds = categoryBlocklists.map(bl => bl.id).filter(id => !defaultBlocklists.includes(id));
+			defaultBlocklists = [...defaultBlocklists, ...newIds];
+		}
+	}
+
+	function getCategoryStats(category: string) {
+		const lists = blocklistsByCategory[category] || [];
+		const enabled = lists.filter(bl => defaultBlocklists.includes(bl.id)).length;
+		return { total: lists.length, enabled };
+	}
+
+	async function saveSettings() {
+		savingSettings = true;
+		const result = await adminUpdateSettings({ default_blocklists: defaultBlocklists });
+		savingSettings = false;
+
+		if (result.error) {
+			toasts.error(result.error);
+		} else {
+			toasts.success('Settings saved');
+		}
 	}
 </script>
 
@@ -117,6 +203,72 @@
 					</div>
 				</section>
 			{/if}
+
+			<!-- Default Settings Section -->
+			<section class="card settings-section">
+				<div class="settings-header">
+					<div>
+						<h2>Default Settings for New Profiles</h2>
+						<p class="settings-description">
+							Select which blocklists should be enabled by default when a new profile is created.
+						</p>
+					</div>
+					<button
+						class="btn btn-primary"
+						on:click={saveSettings}
+						disabled={savingSettings}
+					>
+						{savingSettings ? 'Saving...' : 'Save Settings'}
+					</button>
+				</div>
+
+				<div class="default-blocklists">
+					<h3>Default Blocklists ({defaultBlocklists.length} selected)</h3>
+					<div class="category-list">
+						{#each sortedCategories as category}
+							{@const stats = getCategoryStats(category)}
+							<div class="category-group">
+								<div class="category-header">
+									<label class="category-checkbox">
+										<input
+											type="checkbox"
+											checked={stats.enabled === stats.total && stats.total > 0}
+											indeterminate={stats.enabled > 0 && stats.enabled < stats.total}
+											on:change={() => toggleCategoryDefaults(category)}
+										/>
+										<span class="category-name">{category}</span>
+									</label>
+									<button
+										class="category-expand"
+										on:click={() => toggleSettingsCategory(category)}
+									>
+										<span class="category-count">{stats.enabled}/{stats.total}</span>
+										<span class="expand-icon">{expandedSettingsCategories.has(category) ? '▼' : '▶'}</span>
+									</button>
+								</div>
+
+								{#if expandedSettingsCategories.has(category)}
+									<div class="category-blocklists">
+										{#each blocklistsByCategory[category] as bl}
+											<label class="blocklist-item">
+												<input
+													type="checkbox"
+													checked={defaultBlocklists.includes(bl.id)}
+													on:change={() => toggleDefaultBlocklist(bl.id)}
+												/>
+												<div class="blocklist-info">
+													<span class="blocklist-name">{bl.name}</span>
+													<span class="blocklist-domains">{bl.domain_count.toLocaleString()} domains</span>
+												</div>
+											</label>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+			</section>
 
 			<section class="card">
 				<h2>All Profiles</h2>
@@ -199,7 +351,7 @@
 		margin-bottom: 1rem;
 	}
 
-	input {
+	input[type="password"] {
 		width: 100%;
 		padding: 0.75rem 1rem;
 		background: var(--bg);
@@ -250,6 +402,129 @@
 
 	.card h2 {
 		margin: 0 0 1rem 0;
+	}
+
+	/* Settings Section */
+	.settings-section {
+		border-color: var(--primary);
+	}
+
+	.settings-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		margin-bottom: 1.5rem;
+		gap: 1rem;
+	}
+
+	.settings-description {
+		color: var(--text-secondary);
+		margin: 0.5rem 0 0 0;
+		font-size: 0.875rem;
+	}
+
+	.default-blocklists h3 {
+		margin: 0 0 1rem 0;
+		font-size: 1rem;
+		color: var(--text-secondary);
+	}
+
+	.category-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.category-group {
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		overflow: hidden;
+	}
+
+	.category-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		background: var(--bg);
+	}
+
+	.category-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		cursor: pointer;
+	}
+
+	.category-checkbox input[type="checkbox"] {
+		width: 1.25rem;
+		height: 1.25rem;
+		cursor: pointer;
+	}
+
+	.category-name {
+		font-weight: 500;
+		text-transform: capitalize;
+	}
+
+	.category-expand {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: none;
+		border: none;
+		color: var(--text-secondary);
+		cursor: pointer;
+		padding: 0.25rem;
+	}
+
+	.category-count {
+		font-size: 0.875rem;
+	}
+
+	.expand-icon {
+		font-size: 0.75rem;
+	}
+
+	.category-blocklists {
+		padding: 0.5rem 1rem;
+		border-top: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.blocklist-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem;
+		border-radius: 0.25rem;
+		cursor: pointer;
+	}
+
+	.blocklist-item:hover {
+		background: var(--bg);
+	}
+
+	.blocklist-item input[type="checkbox"] {
+		width: 1rem;
+		height: 1rem;
+		cursor: pointer;
+	}
+
+	.blocklist-info {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.blocklist-name {
+		font-size: 0.875rem;
+	}
+
+	.blocklist-domains {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
 	}
 
 	.table-wrapper {
@@ -338,7 +613,11 @@
 	.btn-primary {
 		background: var(--primary);
 		color: white;
-		width: 100%;
+	}
+
+	.btn-primary:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.btn-outline {
@@ -350,6 +629,14 @@
 	@media (max-width: 768px) {
 		.stats-grid {
 			grid-template-columns: repeat(2, 1fr);
+		}
+
+		.settings-header {
+			flex-direction: column;
+		}
+
+		.settings-header .btn {
+			width: 100%;
 		}
 	}
 </style>
