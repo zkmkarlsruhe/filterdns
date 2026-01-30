@@ -6,6 +6,7 @@ Uses new naming convention:
 - presets (formerly restriction_profiles)
 """
 
+import asyncio
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -658,14 +659,53 @@ async def get_global_stats() -> GlobalStats:
     )
 
 
-async def cleanup_old_logs(days: int) -> int:
-    """Delete logs older than specified days."""
+async def cleanup_old_logs(days: int, batch_size: int = 10000) -> int:
+    """Delete logs older than specified days using batched deletes.
+
+    Uses batched deletes to avoid long-running transactions and reduce
+    database load on large tables.
+
+    Args:
+        days: Delete logs older than this many days
+        batch_size: Maximum rows to delete per batch (default 10000)
+
+    Returns:
+        Total number of rows deleted
+    """
     db = get_db()
     cutoff = datetime.utcnow() - timedelta(days=days)
-    result = await db.execute("DELETE FROM query_logs WHERE timestamp < $1", cutoff)
-    count = int(result.split()[-1]) if result else 0
-    logger.info("Cleaned up old query logs", deleted=count, older_than_days=days)
-    return count
+    total_deleted = 0
+
+    while True:
+        # Delete in batches using CTID for efficient batching
+        result = await db.execute(
+            """
+            DELETE FROM query_logs
+            WHERE ctid IN (
+                SELECT ctid FROM query_logs
+                WHERE timestamp < $1
+                LIMIT $2
+            )
+            """,
+            cutoff,
+            batch_size,
+        )
+
+        # Parse result like "DELETE 5000"
+        batch_count = int(result.split()[-1]) if result else 0
+        total_deleted += batch_count
+
+        # If we deleted less than batch_size, we're done
+        if batch_count < batch_size:
+            break
+
+        # Small delay between batches to reduce load
+        await asyncio.sleep(0.1)
+
+    if total_deleted > 0:
+        logger.info("Cleaned up old query logs", deleted=total_deleted, older_than_days=days)
+
+    return total_deleted
 
 
 # ============================================================================

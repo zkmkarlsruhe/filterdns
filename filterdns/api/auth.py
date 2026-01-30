@@ -27,7 +27,7 @@ _last_cleanup = 0.0
 
 
 def _cleanup_expired_tokens() -> None:
-    """Remove expired tokens from the store."""
+    """Remove expired tokens from the store (lazy cleanup on token operations)."""
     global _last_cleanup
     now = time.time()
 
@@ -36,9 +36,29 @@ def _cleanup_expired_tokens() -> None:
         return
 
     _last_cleanup = now
-    expired = [token for token, data in _profile_tokens.items() if data["expires_at"] < now]
+    # Iterate over copy of keys to avoid mutation during iteration
+    expired = [token for token, data in list(_profile_tokens.items()) if data["expires_at"] < now]
     for token in expired:
-        del _profile_tokens[token]
+        _profile_tokens.pop(token, None)
+
+
+def cleanup_all_expired_tokens() -> int:
+    """Force cleanup of all expired tokens. Called by background task.
+
+    Returns:
+        Number of tokens removed
+    """
+    now = time.time()
+    # Iterate over copy of keys to avoid mutation during iteration
+    expired = [token for token, data in list(_profile_tokens.items()) if data["expires_at"] < now]
+    for token in expired:
+        _profile_tokens.pop(token, None)
+    return len(expired)
+
+
+def get_token_store_size() -> int:
+    """Get current size of token store for monitoring."""
+    return len(_profile_tokens)
 
 
 def generate_profile_token(profile_id: UUID) -> str:

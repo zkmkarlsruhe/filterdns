@@ -143,6 +143,30 @@ class ProfileConfigCache:
         self._cache.clear()
         logger.info("Cache cleared")
 
+    def cleanup_expired(self) -> int:
+        """Remove all expired entries from the cache.
+
+        Called by background cleanup task to prevent unbounded growth
+        from profiles that are never accessed after caching.
+
+        Returns:
+            Number of entries removed
+        """
+        now = time.time()
+        # Iterate over copy of keys to avoid mutation during iteration
+        expired = [
+            profile_id
+            for profile_id, entry in list(self._cache.items())
+            if now - entry.timestamp > self._ttl
+        ]
+        for profile_id in expired:
+            self._cache.pop(profile_id, None)
+
+        if expired:
+            logger.debug("Cache cleanup removed expired entries", count=len(expired))
+
+        return len(expired)
+
     def get_stats(self) -> dict[str, int]:
         """Get cache statistics.
 

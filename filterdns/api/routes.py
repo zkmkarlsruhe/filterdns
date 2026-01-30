@@ -531,6 +531,12 @@ def create_api_blueprint() -> Blueprint:
 
             while True:
                 try:
+                    # Check if client disconnected to avoid infinite polling
+                    # This is more reliable than relying solely on CancelledError
+                    if await request.is_disconnected:
+                        logger.debug("SSE client disconnected", profile_id=str(profile.id))
+                        break
+
                     # Get recent logs since last check
                     logs = await queries.get_query_logs(
                         profile_id=profile.id,
@@ -565,6 +571,7 @@ def create_api_blueprint() -> Blueprint:
                     await asyncio.sleep(1)
 
                 except asyncio.CancelledError:
+                    logger.debug("SSE stream cancelled", profile_id=str(profile.id))
                     break
                 except Exception as e:
                     # Log error but send generic message to client

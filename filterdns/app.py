@@ -11,16 +11,25 @@ from quart import Quart, make_response, request, send_from_directory
 from quart_cors import cors
 
 from filterdns.api import create_api_blueprint
+from filterdns.api.auth import cleanup_all_expired_tokens, get_token_store_size
 from filterdns.api.client_api import create_client_api_blueprint
 from filterdns.blocklist.engine import get_engine
 from filterdns.blocklist.fetcher import load_default_blocklists, update_all_blocklists
 from filterdns.cache import get_config_cache
 from filterdns.config import settings
 from filterdns.db.database import close_db, init_db
+from filterdns.db import queries
 from filterdns.gateway.doh import create_doh_blueprint
 from filterdns.profiles.loader import load_all_presets_into_engine, load_builtin_presets
 
 logger = structlog.get_logger()
+
+# Cleanup intervals (in seconds)
+RATE_LIMIT_CLEANUP_INTERVAL = 60  # Clean rate limit stores every minute
+CACHE_CLEANUP_INTERVAL = 60  # Clean expired cache entries every minute
+TOKEN_CLEANUP_INTERVAL = 300  # Clean expired tokens every 5 minutes
+LOG_CLEANUP_INTERVAL = 86400  # Clean old logs once per day
+LOG_RETENTION_DAYS = 30  # Keep logs for 30 days
 
 
 def create_app() -> Quart:
@@ -70,6 +79,38 @@ def create_app() -> Quart:
     RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window for general sensitive endpoints
     ADMIN_RATE_LIMIT_WINDOW = 300  # 5 minutes for admin login
     ADMIN_RATE_LIMIT_MAX_ATTEMPTS = 5  # max login attempts per window
+
+    def cleanup_rate_limit_stores() -> tuple[int, int]:
+        """Clean expired entries from rate limit stores.
+
+        Returns:
+            Tuple of (rate_limit_cleaned, admin_rate_limit_cleaned) counts
+        """
+        now = time()
+        rate_cleaned = 0
+        admin_cleaned = 0
+
+        # Clean rate_limit_store - iterate over copy of keys
+        for ip in list(rate_limit_store.keys()):
+            original_len = len(rate_limit_store[ip])
+            rate_limit_store[ip] = [t for t in rate_limit_store[ip] if now - t < RATE_LIMIT_WINDOW]
+            rate_cleaned += original_len - len(rate_limit_store[ip])
+            # Remove empty entries to prevent unbounded key growth
+            if not rate_limit_store[ip]:
+                del rate_limit_store[ip]
+
+        # Clean admin_rate_limit_store - iterate over copy of keys
+        for ip in list(admin_rate_limit_store.keys()):
+            original_len = len(admin_rate_limit_store[ip])
+            admin_rate_limit_store[ip] = [
+                t for t in admin_rate_limit_store[ip] if now - t < ADMIN_RATE_LIMIT_WINDOW
+            ]
+            admin_cleaned += original_len - len(admin_rate_limit_store[ip])
+            # Remove empty entries to prevent unbounded key growth
+            if not admin_rate_limit_store[ip]:
+                del admin_rate_limit_store[ip]
+
+        return rate_cleaned, admin_cleaned
 
     def get_client_ip_for_rate_limit() -> str:
         """Get client IP for rate limiting, handling proxies."""
@@ -238,6 +279,11 @@ def create_app() -> Quart:
         # Start background blocklist update task
         app.blocklist_update_task = asyncio.create_task(_blocklist_update_loop(engine))
 
+        # Start background housekeeping task (cleanup rate limits, tokens, cache, logs)
+        app.housekeeping_task = asyncio.create_task(
+            _housekeeping_loop(cache, cleanup_rate_limit_stores)
+        )
+
         # Count preset blocklists vs regular blocklists
         all_ids = engine.get_blocklist_ids()
         preset_count = sum(1 for bid in all_ids if bid.startswith("preset_"))
@@ -255,11 +301,20 @@ def create_app() -> Quart:
         """Cleanup resources on shutdown."""
         logger.info("Shutting down FilterDNS server")
 
-        # Cancel background task
+        # Cancel all background tasks
+        background_tasks = []
         if hasattr(app, "blocklist_update_task"):
-            app.blocklist_update_task.cancel()
+            background_tasks.append(app.blocklist_update_task)
+        if hasattr(app, "housekeeping_task"):
+            background_tasks.append(app.housekeeping_task)
+
+        for task in background_tasks:
+            task.cancel()
+
+        # Wait for all tasks to complete
+        for task in background_tasks:
             try:
-                await app.blocklist_update_task
+                await task
             except asyncio.CancelledError:
                 pass
 
@@ -281,6 +336,91 @@ async def _blocklist_update_loop(engine) -> None:
         except Exception as e:
             logger.error("Blocklist update error", error=str(e))
             await asyncio.sleep(300)  # Wait 5 minutes on error
+
+
+async def _housekeeping_loop(cache, cleanup_rate_limits_fn) -> None:
+    """Background task for periodic cleanup of in-memory stores and old logs.
+
+    Runs multiple cleanup tasks at different intervals to prevent memory leaks
+    and unbounded growth of in-memory data structures.
+
+    Args:
+        cache: ProfileConfigCache instance
+        cleanup_rate_limits_fn: Function to clean rate limit stores
+    """
+    # Track when each cleanup type last ran
+    last_rate_limit_cleanup = time()
+    last_cache_cleanup = time()
+    last_token_cleanup = time()
+    last_log_cleanup = time()
+
+    # Check interval (how often we wake up to check if cleanups are due)
+    check_interval = 30  # seconds
+
+    logger.info(
+        "Housekeeping task started",
+        rate_limit_interval=RATE_LIMIT_CLEANUP_INTERVAL,
+        cache_interval=CACHE_CLEANUP_INTERVAL,
+        token_interval=TOKEN_CLEANUP_INTERVAL,
+        log_interval=LOG_CLEANUP_INTERVAL,
+    )
+
+    while True:
+        try:
+            await asyncio.sleep(check_interval)
+            now = time()
+
+            # Rate limit store cleanup (every minute)
+            if now - last_rate_limit_cleanup >= RATE_LIMIT_CLEANUP_INTERVAL:
+                rate_cleaned, admin_cleaned = cleanup_rate_limits_fn()
+                if rate_cleaned > 0 or admin_cleaned > 0:
+                    logger.debug(
+                        "Rate limit cleanup",
+                        rate_entries=rate_cleaned,
+                        admin_entries=admin_cleaned,
+                    )
+                last_rate_limit_cleanup = now
+
+            # Cache cleanup (every minute)
+            if now - last_cache_cleanup >= CACHE_CLEANUP_INTERVAL:
+                cache_cleaned = cache.cleanup_expired()
+                if cache_cleaned > 0:
+                    logger.debug("Cache cleanup", entries_removed=cache_cleaned)
+                last_cache_cleanup = now
+
+            # Token store cleanup (every 5 minutes)
+            if now - last_token_cleanup >= TOKEN_CLEANUP_INTERVAL:
+                tokens_cleaned = cleanup_all_expired_tokens()
+                token_store_size = get_token_store_size()
+                if tokens_cleaned > 0:
+                    logger.debug(
+                        "Token cleanup",
+                        tokens_removed=tokens_cleaned,
+                        tokens_remaining=token_store_size,
+                    )
+                last_token_cleanup = now
+
+            # Log cleanup (once per day)
+            if now - last_log_cleanup >= LOG_CLEANUP_INTERVAL:
+                try:
+                    logs_deleted = await queries.cleanup_old_logs(LOG_RETENTION_DAYS)
+                    if logs_deleted > 0:
+                        logger.info(
+                            "Query log cleanup completed",
+                            logs_deleted=logs_deleted,
+                            retention_days=LOG_RETENTION_DAYS,
+                        )
+                except Exception as e:
+                    logger.error("Query log cleanup failed", error=str(e))
+                last_log_cleanup = now
+
+        except asyncio.CancelledError:
+            logger.info("Housekeeping task cancelled")
+            break
+        except Exception as e:
+            logger.error("Housekeeping error", error=str(e))
+            # Continue running despite errors
+            await asyncio.sleep(60)
 
 
 # Create the app instance for ASGI servers
