@@ -11,6 +11,7 @@ from quart import Quart, make_response, request, send_from_directory
 from quart_cors import cors
 
 from filterdns.api import create_api_blueprint
+from filterdns.api.client_api import create_client_api_blueprint
 from filterdns.blocklist.engine import get_engine
 from filterdns.blocklist.fetcher import load_default_blocklists, update_all_blocklists
 from filterdns.cache import get_config_cache
@@ -164,6 +165,7 @@ def create_app() -> Quart:
 
     # Register blueprints
     app.register_blueprint(create_api_blueprint())
+    app.register_blueprint(create_client_api_blueprint())
     app.register_blueprint(create_doh_blueprint())
 
     # Sensitive file patterns that should never be served or trigger SPA fallback

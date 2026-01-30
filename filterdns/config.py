@@ -33,10 +33,15 @@ class Settings(BaseSettings):
 
     # Server settings
     domain: str = "filterdns.zkm.de"
-    admin_port: int = 8080
+    port: int = 8080  # HTTP port for web UI and API
+    admin_port: int = 8080  # Deprecated, use 'port' instead
     dns_port: int = 53
     doh_port: int = 443
     dot_port: int = 853
+
+    # Public URL for client onboarding (e.g., https://filterdns.zkm.de)
+    # If not set, uses http://localhost:{port}
+    public_url: str | None = None
 
     # TLS certificates (wildcard for *.filterdns.zkm.de)
     tls_cert: Path | None = None
