@@ -1,8 +1,7 @@
 """Pydantic models for database entities.
 
-Naming convention (museum-focused):
-- Profile: DNS filtering configuration (e.g., "ps5-gaming-exhibition")
-- Device: Individual machine using a profile (e.g., PS5 in Hall 3)
+- Profile: DNS filtering configuration (e.g., "my-devices")
+- Device: Individual machine using a profile
 - Preset: Predefined blocking rule set (e.g., "block-social-media")
 """
 
@@ -29,11 +28,11 @@ class Profile(BaseModel):
     """DNS filtering profile configuration.
 
     A profile defines filtering rules for a group of devices.
-    Example: "ps5-gaming-exhibition" for all PS5s in gaming exhibition.
+    Example: "my-devices" for all personal devices.
     """
 
     id: UUID
-    name: str  # e.g., "ps5-gaming" → ps5-gaming.filterdns.zkm.de
+    name: str  # e.g., "my-devices" → my-devices.filterdns.example.com
     description: str | None = None
     password_hash: str | None = None
     filtering_paused_until: datetime | None = None

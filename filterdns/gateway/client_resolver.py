@@ -1,11 +1,10 @@
 """Profile resolution from DNS requests.
 
-Naming convention (museum-focused):
-- Profile: DNS filtering configuration (e.g., "ps5-gaming-exhibition")
-- Device: Individual machine using a profile (e.g., PS5 in Hall 3)
+- Profile: DNS filtering configuration (e.g., "my-devices")
+- Device: Individual machine using a profile
 
 Identifies profiles by:
-- DoH/DoT: Subdomain from Host header or SNI (e.g., ps5-gaming.filterdns.zkm.de)
+- DoH/DoT: Subdomain from Host header or SNI (e.g., my-devices.filterdns.example.com)
 - Legacy DNS: Source IP lookup in devices table
 """
 
@@ -29,7 +28,7 @@ class ProfileResolver:
         """Resolve profile from subdomain in Host header or SNI.
 
         Args:
-            host: Full hostname (e.g., "ps5-gaming.filterdns.zkm.de")
+            host: Full hostname (e.g., "my-devices.filterdns.example.com")
 
         Returns:
             Profile configuration or None if not found
@@ -69,7 +68,7 @@ class ProfileResolver:
             hostname = await get_resolver().reverse_lookup(ip_address)
             if hostname:
                 # Extract potential profile name from hostname
-                # e.g., "lobby-display.zkm.local" -> "lobby-display"
+                # e.g., "lobby-display.local" -> "lobby-display"
                 parts = hostname.split(".")
                 if parts:
                     profile_name = parts[0]

@@ -59,7 +59,7 @@
 <div class="landing">
 	<div class="hero">
 		<h1>FilterDNS</h1>
-		<p class="tagline">Self-hosted DNS filtering for ZKM</p>
+		<p class="tagline">Self-hosted DNS filtering</p>
 	</div>
 
 	<div class="access-section">
@@ -82,7 +82,7 @@
 							maxlength="63"
 							required
 						/>
-						<span class="suffix">.filterdns.zkm.de</span>
+						<span class="suffix">.your-domain.com</span>
 					</div>
 					<small>Use lowercase letters, numbers, and hyphens</small>
 				</div>

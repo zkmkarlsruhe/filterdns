@@ -166,7 +166,7 @@
 							required
 							disabled={loading}
 						/>
-						<span class="suffix">.filterdns.zkm.de</span>
+						<span class="suffix">.your-domain.com</span>
 					</div>
 					<small>Use lowercase letters, numbers, and hyphens</small>
 				</div>

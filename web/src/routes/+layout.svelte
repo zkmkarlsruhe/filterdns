@@ -23,7 +23,7 @@
 	</main>
 
 	<footer>
-		<p>FilterDNS - Self-hosted DNS filtering for ZKM</p>
+		<p>FilterDNS - Self-hosted DNS filtering</p>
 	</footer>
 
 	<!-- Toast notifications -->

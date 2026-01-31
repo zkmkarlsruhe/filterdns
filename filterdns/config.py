@@ -32,18 +32,18 @@ class Settings(BaseSettings):
     )
 
     # Server settings
-    domain: str = "filterdns.zkm.de"
+    domain: str = "filterdns.example.com"
     port: int = 8080  # HTTP port for web UI and API
     admin_port: int = 8080  # Deprecated, use 'port' instead
     dns_port: int = 53
     doh_port: int = 443
     dot_port: int = 853
 
-    # Public URL for client onboarding (e.g., https://filterdns.zkm.de)
+    # Public URL for profile onboarding (e.g., https://filterdns.example.com)
     # If not set, uses http://localhost:{port}
     public_url: str | None = None
 
-    # TLS certificates (wildcard for *.filterdns.zkm.de)
+    # TLS certificates (wildcard for *.filterdns.example.com)
     tls_cert: Path | None = None
     tls_key: Path | None = None
 
@@ -51,8 +51,8 @@ class Settings(BaseSettings):
     upstream_dns: Annotated[list[str], Field(default_factory=lambda: ["1.1.1.1", "8.8.8.8"])]
     upstream_timeout: float = 5.0
 
-    # Client identification for legacy DNS (port 53)
-    ptr_server: str | None = None  # e.g., "infoblox.zkm.local"
+    # Profile identification for legacy DNS (port 53)
+    ptr_server: str | None = None  # e.g., "your-dns-server.local"
     ptr_timeout: float = 2.0
     auto_create_clients: bool = True
     default_client: str = "default"
