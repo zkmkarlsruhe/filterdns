@@ -328,8 +328,8 @@ class TestExhibitionScenario:
             maintenance_mode=False,
             maintenance_allowlist=set(),
             allow_rules={
-                "exhibition-content.zkm.de",  # Custom exhibition content
-                "api.exhibition.zkm.de",  # Exhibition API
+                "internal.example.com",  # Custom internal content
+                "api.internal.example.com",  # Internal API
             },
             deny_rules={
                 "facebook.com",  # Specifically block social media
@@ -338,9 +338,9 @@ class TestExhibitionScenario:
             active_preset_ids=["windows-updates", "samsung-tv"],
         )
 
-        # Test exhibition domain allowed
+        # Test internal domain allowed
         result = await dns_filter._apply_filter_rules(
-            "exhibition-content.zkm.de", config, logger
+            "internal.example.com", config, logger
         )
         assert result.allowed is True
         assert result.reason == "allow_rule"

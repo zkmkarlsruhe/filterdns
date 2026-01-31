@@ -31,7 +31,7 @@ const launchdPlist = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>de.zkm.filterdns-client</string>
+    <string>io.filterdns.client</string>
     <key>ProgramArguments</key>
     <array>
         <string>{{.ExecPath}}</string>
@@ -83,7 +83,7 @@ func Start() error {
 	case "linux":
 		return runCmd("systemctl", "start", "filterdns-client")
 	case "darwin":
-		return runCmd("launchctl", "load", "/Library/LaunchDaemons/de.zkm.filterdns-client.plist")
+		return runCmd("launchctl", "load", "/Library/LaunchDaemons/io.filterdns.client.plist")
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
@@ -95,7 +95,7 @@ func Stop() error {
 	case "linux":
 		return runCmd("systemctl", "stop", "filterdns-client")
 	case "darwin":
-		return runCmd("launchctl", "unload", "/Library/LaunchDaemons/de.zkm.filterdns-client.plist")
+		return runCmd("launchctl", "unload", "/Library/LaunchDaemons/io.filterdns.client.plist")
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
@@ -111,7 +111,7 @@ func Status() (string, error) {
 		}
 		return string(out), nil
 	case "darwin":
-		out, err := exec.Command("launchctl", "list", "de.zkm.filterdns-client").Output()
+		out, err := exec.Command("launchctl", "list", "io.filterdns.client").Output()
 		if err != nil {
 			return "not installed", nil
 		}
@@ -210,7 +210,7 @@ func installDarwin() error {
 	}
 
 	// Create launchd plist
-	plistPath := "/Library/LaunchDaemons/de.zkm.filterdns-client.plist"
+	plistPath := "/Library/LaunchDaemons/io.filterdns.client.plist"
 	f, err := os.Create(plistPath)
 	if err != nil {
 		return fmt.Errorf("failed to create plist: %w", err)
@@ -228,13 +228,13 @@ func installDarwin() error {
 	fmt.Printf("Created launchd plist at %s\n", plistPath)
 
 	fmt.Println("Service installed")
-	fmt.Println("Start with: sudo launchctl load /Library/LaunchDaemons/de.zkm.filterdns-client.plist")
+	fmt.Println("Start with: sudo launchctl load /Library/LaunchDaemons/io.filterdns.client.plist")
 	return nil
 }
 
 func uninstallDarwin() error {
-	runCmd("launchctl", "unload", "/Library/LaunchDaemons/de.zkm.filterdns-client.plist")
-	os.Remove("/Library/LaunchDaemons/de.zkm.filterdns-client.plist")
+	runCmd("launchctl", "unload", "/Library/LaunchDaemons/io.filterdns.client.plist")
+	os.Remove("/Library/LaunchDaemons/io.filterdns.client.plist")
 	os.Remove("/usr/local/bin/filterdns-client")
 	fmt.Println("Service uninstalled")
 	return nil

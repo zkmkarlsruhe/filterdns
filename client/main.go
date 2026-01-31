@@ -20,7 +20,7 @@ func main() {
 	log.Println("Starting FilterDNS Client (GUI mode)")
 
 	// Create Fyne application
-	a := app.NewWithID("de.zkm.filterdns-client")
+	a := app.NewWithID("io.filterdns.client")
 	a.SetIcon(gui.AppIcon())
 	log.Println("Fyne app created")
 
