@@ -48,7 +48,7 @@ git push origin main
 
 ### 3. Publish to GitHub
 ```bash
-./scripts/publish-github.sh
+./dev/publish-github.sh
 ```
 
 This script:
@@ -96,5 +96,5 @@ git commit && git push origin dev
 # Release to GitHub
 git checkout main
 git merge dev
-./scripts/publish-github.sh
+./dev/publish-github.sh
 ```

@@ -19,7 +19,7 @@ var (
 	// DefaultServerURL is the default FilterDNS server URL.
 	// For development, this is localhost:8080.
 	// For production builds, override via -ldflags:
-	//   -ldflags "-X github.com/zkmkarlsruhe/filterdns-client/internal/config.DefaultServerURL=https://filterdns.zkm.de"
+	//   -ldflags "-X github.com/zkmkarlsruhe/filterdns-client/internal/config.DefaultServerURL=https://filterdns.example.com"
 	DefaultServerURL = "http://localhost:8080"
 )
 

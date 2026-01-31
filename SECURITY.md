@@ -7,7 +7,8 @@ If you discover a security vulnerability in FilterDNS, please report it responsi
 ### How to Report
 
 1. **Do not** open a public GitHub issue for security vulnerabilities
-2. Email the maintainer directly with details of the vulnerability
+2. Email security issues to: **security@zkm.de** (or use GitHub's private vulnerability reporting)
+3. Include details of the vulnerability
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce

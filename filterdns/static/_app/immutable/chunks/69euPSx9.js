@@ -1,1 +1,0 @@
-import{w as r}from"./CpBicGIy.js";const f=r(!1);function u(){const{subscribe:i,update:e}=r([]);let c=0;return{subscribe:i,show(s,n="info"){const o=c++;e(t=>[...t,{id:o,message:s,type:n}]),setTimeout(()=>{e(t=>t.filter(a=>a.id!==o))},5e3)},success(s){this.show(s,"success")},error(s){this.show(s,"error")}}}const h=u();export{f as i,h as t};
