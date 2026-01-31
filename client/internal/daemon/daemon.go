@@ -11,9 +11,9 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/zkm/filterdns-client/internal/config"
-	"github.com/zkm/filterdns-client/internal/dns"
-	"github.com/zkm/filterdns-client/internal/system"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/dns"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/system"
 )
 
 const SocketPath = "/var/run/filterdns.sock"

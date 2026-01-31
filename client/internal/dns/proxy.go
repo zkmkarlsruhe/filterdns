@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	"github.com/zkm/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
 )
 
 // Proxy is a local DNS proxy that forwards queries to FilterDNS or split DNS servers

@@ -12,10 +12,10 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/zkm/filterdns-client/internal/config"
-	"github.com/zkm/filterdns-client/internal/daemon"
-	"github.com/zkm/filterdns-client/internal/onboard"
-	filtersync "github.com/zkm/filterdns-client/internal/sync"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/daemon"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/onboard"
+	filtersync "github.com/zkmkarlsruhe/filterdns-client/internal/sync"
 )
 
 // GUI holds the application GUI state

@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
-	"github.com/zkm/filterdns-client/internal/gui"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/gui"
 )
 
 func main() {

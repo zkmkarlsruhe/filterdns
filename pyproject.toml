@@ -5,7 +5,7 @@ description = "Self-hosted DNS filtering service with per-profile configuration"
 authors = ["Marc Schütze"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/mschuetzde/filterdns"
+repository = "https://github.com/zkmkarlsruhe/filterdns"
 keywords = ["dns", "filtering", "adblock", "privacy", "self-hosted"]
 packages = [{include = "filterdns"}]
 

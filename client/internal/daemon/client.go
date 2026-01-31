@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/zkm/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
 )
 
 // Client communicates with the daemon

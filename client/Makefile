@@ -1,10 +1,10 @@
 .PHONY: dev build build-all clean install-deps test fmt lint
 
 # Default server URL (override with: make build SERVER_URL=https://your-server.com)
-SERVER_URL ?= https://filterdns.zkm.de
+SERVER_URL ?= https://filterdns.example.com
 
 # Build flags
-LDFLAGS := -s -w -X 'github.com/zkm/filterdns-client/internal/config.DefaultServerURL=$(SERVER_URL)'
+LDFLAGS := -s -w -X 'github.com/zkmkarlsruhe/filterdns-client/internal/config.DefaultServerURL=$(SERVER_URL)'
 
 # Build for current platform
 build:

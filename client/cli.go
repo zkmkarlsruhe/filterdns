@@ -6,11 +6,11 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/zkm/filterdns-client/internal/config"
-	"github.com/zkm/filterdns-client/internal/daemon"
-	"github.com/zkm/filterdns-client/internal/onboard"
-	"github.com/zkm/filterdns-client/internal/service"
-	"github.com/zkm/filterdns-client/internal/system"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/daemon"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/onboard"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/service"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/system"
 )
 
 func runCLI() {

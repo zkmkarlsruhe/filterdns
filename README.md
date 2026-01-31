@@ -52,7 +52,7 @@ Self-hosted DNS filtering service with per-profile configuration. Block ads, tra
 
 ```bash
 # Clone the repository
-git clone https://github.com/mschuetzde/filterdns.git
+git clone https://github.com/zkmkarlsruhe/filterdns.git
 cd filterdns
 
 # Copy example environment

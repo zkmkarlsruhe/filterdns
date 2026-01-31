@@ -3,7 +3,7 @@ package dns
 import (
 	"strings"
 
-	"github.com/zkm/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
 )
 
 // ForwarderMatcher matches domain names against forwarder rules

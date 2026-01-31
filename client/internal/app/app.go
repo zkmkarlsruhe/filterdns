@@ -3,9 +3,9 @@ package app
 import (
 	"sync"
 
-	"github.com/zkm/filterdns-client/internal/config"
-	"github.com/zkm/filterdns-client/internal/dns"
-	"github.com/zkm/filterdns-client/internal/system"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/dns"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/system"
 )
 
 // App holds the core application logic (shared between GUI and CLI)

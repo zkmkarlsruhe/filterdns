@@ -1,4 +1,4 @@
-module github.com/zkm/filterdns-client
+module github.com/zkmkarlsruhe/filterdns-client
 
 go 1.22.0
 

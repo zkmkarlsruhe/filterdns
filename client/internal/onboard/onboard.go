@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zkm/filterdns-client/internal/config"
+	"github.com/zkmkarlsruhe/filterdns-client/internal/config"
 )
 
 // Result contains the onboarding result
