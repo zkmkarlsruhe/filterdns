@@ -1,4 +1,15 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/zkmkarlsruhe/zkm-open-source/main/assets/zkm-logo-light.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/zkmkarlsruhe/zkm-open-source/main/assets/zkm-logo.svg">
+    <img alt="ZKM" src="https://raw.githubusercontent.com/zkmkarlsruhe/zkm-open-source/main/assets/zkm-logo.svg" width="120">
+  </picture>
+</p>
+
 # FilterDNS
+
+[![ZKM](https://img.shields.io/badge/ZKM-Karlsruhe-blue)](https://zkm.de)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Self-hosted DNS filtering service with per-profile configuration. Block ads, trackers, and malware at the DNS level with customizable profiles for different devices or use cases.
 
@@ -248,4 +259,8 @@ filterdns/
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-Copyright (c) 2026 Marc Schütze @ ZKM | Center for Art and Media Karlsruhe
+---
+
+Part of [ZKM Open Source](https://github.com/zkmkarlsruhe)
+
+Copyright (c) 2026 [ZKM | Center for Art and Media Karlsruhe](https://zkm.de)
