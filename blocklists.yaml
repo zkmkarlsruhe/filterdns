@@ -102,12 +102,6 @@ blocklists:
     description: Phishing domains blocklist
     category: malware
 
-  - id: malwaredomains
-    name: Malware Domain List
-    url: https://www.malwaredomainlist.com/hostslist/hosts.txt
-    description: Malware domains
-    category: malware
-
   - id: threatfox
     name: ThreatFox IOCs
     url: https://threatfox.abuse.ch/downloads/hostfile/
@@ -122,13 +116,13 @@ blocklists:
 
   - id: ransomware-tracker
     name: Ransomware Tracker
-    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/ransomware.txt
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/ransomware.txt
     description: Known ransomware domains
     category: malware
 
   - id: nocoin
     name: NoCoin
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/coinblocklist
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/crypto.txt
     description: Cryptocurrency mining scripts
     category: malware
 
@@ -197,55 +191,19 @@ blocklists:
 
   - id: block-tiktok
     name: Block TikTok
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/tiktokaliases
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/tiktok.txt
     description: TikTok and ByteDance
     category: social-tiktok
 
   - id: block-twitter
     name: Block Twitter/X
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/twitter
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/twitter.txt
     description: Twitter/X platform
     category: social-twitter
 
-  - id: block-snapchat
-    name: Block Snapchat
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/snapchat
-    description: Snapchat
-    category: social-snapchat
-
-  - id: block-pinterest
-    name: Block Pinterest
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/pinterest
-    description: Pinterest
-    category: social-pinterest
-
-  - id: block-reddit
-    name: Block Reddit
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/reddit
-    description: Reddit
-    category: social-reddit
-
-  - id: block-linkedin
-    name: Block LinkedIn
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/linkedin
-    description: LinkedIn
-    category: social-linkedin
-
-  - id: block-discord
-    name: Block Discord
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/discord
-    description: Discord
-    category: social-discord
-
-  - id: block-telegram
-    name: Block Telegram
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/telegram
-    description: Telegram
-    category: social-telegram
-
   - id: block-whatsapp
     name: Block WhatsApp
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/whatsapp
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/whatsapp.txt
     description: WhatsApp
     category: social-whatsapp
 
@@ -267,7 +225,7 @@ blocklists:
 
   - id: betterblocker-gambling
     name: BetterBlocker Gambling
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/gambling
+    url: https://raw.githubusercontent.com/olbat/ut1-blacklists/master/blacklists/gambling/domains
     description: Additional gambling sites
     category: gambling
 
@@ -277,103 +235,40 @@ blocklists:
 
   - id: ut1-dating
     name: UT1 Dating Sites
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/dating
+    url: https://raw.githubusercontent.com/olbat/ut1-blacklists/master/blacklists/dating/domains
     description: Dating and hookup sites
     category: dating
 
-  - id: shallalist-dating
-    name: Shallalist Dating
-    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/dating.list
-    description: Dating sites from Shallalist
-    category: dating
 
   # ============================================================================
   # GAMING & ENTERTAINMENT DISTRACTIONS
   # ============================================================================
 
-  - id: block-twitch
-    name: Block Twitch
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/twitch
-    description: Twitch streaming
-    category: gaming
-
-  - id: block-steam
-    name: Block Steam
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/steam
-    description: Steam gaming platform
-    category: gaming
-
-  - id: block-epicgames
-    name: Block Epic Games
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/epic
-    description: Epic Games store
-    category: gaming
-
-  - id: block-roblox
-    name: Block Roblox
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/roblox
-    description: Roblox gaming platform
-    category: gaming
-
-  - id: block-minecraft
-    name: Block Minecraft
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/minecraft
-    description: Minecraft servers
-    category: gaming
 
   # ============================================================================
   # STREAMING SERVICES
   # ============================================================================
 
-  - id: block-netflix
-    name: Block Netflix
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/netflix
-    description: Netflix
-    category: streaming
-
   - id: block-youtube
     name: Block YouTube
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/youtube
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/youtube.txt
     description: YouTube
     category: streaming
 
-  - id: block-spotify
-    name: Block Spotify
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/spotify
-    description: Spotify
-    category: streaming
-
-  - id: block-disney
-    name: Block Disney+
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/disney
-    description: Disney Plus
-    category: streaming
-
-  - id: block-primevideo
-    name: Block Prime Video
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/amazon-video
-    description: Amazon Prime Video
-    category: streaming
 
   # ============================================================================
   # PIRACY & TORRENTS
   # ============================================================================
 
-  - id: sinfonietta-torrents
-    name: Sinfonietta Torrents
-    url: https://raw.githubusercontent.com/Sinfonietta/hostfiles/master/proxies-and-vpns-hosts
-    description: Torrent sites and proxies
-    category: piracy
-
   - id: ut1-warez
     name: UT1 Warez
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/warez
+    url: https://raw.githubusercontent.com/olbat/ut1-blacklists/master/blacklists/warez/domains
     description: Warez and piracy sites
     category: piracy
 
   - id: block-torrent
     name: Torrent Sites
-    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/torrent.list
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/torrent.txt
     description: Torrent and P2P sites
     category: piracy
 
@@ -383,15 +278,10 @@ blocklists:
 
   - id: ut1-drugs
     name: UT1 Drugs
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/drugs
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/drugs.txt
     description: Drug-related sites
     category: drugs
 
-  - id: shallalist-drugs
-    name: Shallalist Drugs
-    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/drugs.list
-    description: Drug-related content
-    category: drugs
 
   # ============================================================================
   # FAKE NEWS & MISINFORMATION
@@ -403,11 +293,6 @@ blocklists:
     description: Fake news and misinformation
     category: fakenews
 
-  - id: quidsup-fakenews
-    name: Quidsup Fake News
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/fakenews
-    description: Additional fake news sites
-    category: fakenews
 
   # ============================================================================
   # NATIVE TRACKING (App Telemetry)
@@ -477,29 +362,6 @@ blocklists:
     description: Smart TV tracking and ads
     category: smarttv
 
-  - id: samsung-tv-block
-    name: Samsung TV Blocklist
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/samsung-smart-tv
-    description: Samsung Smart TV
-    category: smarttv
-
-  - id: android-tv-block
-    name: Android TV Blocklist
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/androidtv
-    description: Android TV tracking
-    category: smarttv
-
-  - id: firetv-block
-    name: Fire TV Blocklist
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/firetv
-    description: Amazon Fire TV
-    category: smarttv
-
-  - id: roku-block
-    name: Roku Blocklist
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/roku
-    description: Roku devices
-    category: smarttv
 
   # ============================================================================
   # BIG TECH BLOCKING
@@ -535,21 +397,10 @@ blocklists:
 
   - id: block-vpn
     name: Block VPN Services
-    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/vpn.list
+    url: https://raw.githubusercontent.com/olbat/ut1-blacklists/master/blacklists/vpn/domains
     description: VPN provider domains
     category: vpn
 
-  - id: block-proxy
-    name: Block Proxy Services
-    url: https://raw.githubusercontent.com/cbuijs/shern/master/categories/proxy.list
-    description: Web proxies
-    category: vpn
-
-  - id: block-tor
-    name: Block Tor
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/tor
-    description: Tor network
-    category: vpn
 
   # ============================================================================
   # REGIONAL LISTS
@@ -597,13 +448,13 @@ blocklists:
 
   - id: crypto-mining
     name: Crypto Mining
-    url: https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/coinblocklist
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/crypto.txt
     description: Cryptocurrency mining pools
     category: crypto
 
   - id: crypto-scams
     name: Crypto Scams
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/crypto-scams
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/scam.txt
     description: Cryptocurrency scam sites
     category: crypto
 
@@ -667,7 +518,7 @@ blocklists:
 
   - id: 1hosts-pro
     name: 1Hosts Pro
-    url: https://o0.pages.dev/Pro/hosts.txt
+    url: https://cdn.jsdelivr.net/gh/badmojr/1Hosts@latest/Pro/hosts.txt
     description: Extended curated blocklist
     category: ads
 
@@ -677,25 +528,19 @@ blocklists:
 
   - id: hagezi-dyndns
     name: Hagezi DynDNS
-    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/dyndns.txt
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/dyndns.txt
     description: Block dynamic DNS services (often abused)
     category: security
 
   - id: hagezi-hoster
     name: Hagezi Hoster
-    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/hoster.txt
+    url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/hoster.txt
     description: Block known abuse-friendly hosting
     category: security
 
   # ============================================================================
   # MOBILE & APP TELEMETRY
   # ============================================================================
-
-  - id: mobile-ads
-    name: Mobile Ads Filter
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/mobile-ads
-    description: Mobile app advertising
-    category: mobile
 
   - id: adguard-mobile
     name: AdGuard Mobile Filter
@@ -715,7 +560,7 @@ blocklists:
 
   - id: anti-fraud
     name: Anti-Fraud
-    url: https://raw.githubusercontent.com/nickspaargaren/pihole-google/master/categories/anti-fraud
+    url: https://raw.githubusercontent.com/blocklistproject/Lists/master/fraud.txt
     description: Fraud prevention list
     category: security
 
@@ -729,8 +574,3 @@ blocklists:
     description: All Hagezi lists combined (very aggressive)
     category: ultimate
 
-  - id: oisd-full
-    name: OISD Full
-    url: https://full.oisd.nl/domainswild
-    description: Most comprehensive OISD list
-    category: ultimate
